@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Activity, Gauge, Footprints, HeartPulse, MoveUpRight, PersonStanding, Zap } from 'lucide-react'
+import { Activity, Gauge, Footprints, MoveUpRight, PersonStanding, Zap } from 'lucide-react'
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { ActivityStat, Checkin, GpsMetric, Profile } from '../types'
 
@@ -24,12 +24,11 @@ export function GpsTab({ metrics, profiles, selectedPlayer, canCompare }: GpsTab
   })
   const chosen = filtered[0]
   const comparable = metrics.filter((metric) => playerIds.has(metric.player_id) && (eventFilter === 'all' || metric.event_type === eventFilter))
-  const average = (key: 'max_speed' | 'total_distance' | 'hsr_distance' | 'hml_distance') => comparable.length ? comparable.reduce((sum, row) => sum + Number(row[key]), 0) / comparable.length : 0
+  const average = (key: 'max_speed' | 'total_distance' | 'hsr_distance') => comparable.length ? comparable.reduce((sum, row) => sum + Number(row[key]), 0) / comparable.length : 0
   const chartData = filtered.slice(0, 8).map((metric) => ({
     name: new Date(`${metric.date}T00:00:00`).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }),
     'Total distance': metric.total_distance,
     HSR: metric.hsr_distance,
-    'HML distance': metric.hml_distance,
     'Max speed': metric.max_speed,
     'Team average': canCompare ? average('max_speed') : undefined,
   }))
@@ -39,9 +38,8 @@ export function GpsTab({ metrics, profiles, selectedPlayer, canCompare }: GpsTab
     { label: 'Max speed', value: chosen ? `${chosen.max_speed}` : '—', unit: 'km/h', icon: Gauge, color: 'purple' },
     { label: 'High-speed running', value: chosen ? `${format.format(chosen.hsr_distance)}` : '—', unit: 'm', icon: MoveUpRight, color: 'green' },
     { label: 'Sprints', value: chosen ? `${chosen.sprint_count}` : '—', unit: 'efforts', icon: Zap, color: 'orange' },
-    { label: 'Accel & decel', value: chosen ? `${chosen.accel_decel_count}` : '—', unit: 'actions', icon: PersonStanding, color: 'blue' },
-    { label: 'HML distance', value: chosen ? `${format.format(chosen.hml_distance)}` : '—', unit: 'm', icon: HeartPulse, color: 'purple' },
-    { label: 'Fatigue index', value: chosen ? `${chosen.fatigue_index}` : '—', unit: '/ 10', icon: Activity, color: 'green' },
+    { label: 'Accelerations', value: chosen ? `${chosen.accelerations}` : '—', unit: 'actions', icon: PersonStanding, color: 'blue' },
+    { label: 'Decelerations', value: chosen ? `${chosen.decelerations}` : '—', unit: 'actions', icon: Activity, color: 'green' },
   ]
 
   return (
@@ -53,8 +51,8 @@ export function GpsTab({ metrics, profiles, selectedPlayer, canCompare }: GpsTab
       {!canCompare && <div className="benchmark-note personal-note">Only your personal performance records are visible to your player account.</div>}
       <div className="metric-grid">{metricsCards.map(({ label, value, unit, icon: Icon, color }) => <article className="surface metric-card" key={label}><div className={`metric-icon ${color}`}><Icon size={18} /></div><p>{label}</p><div className="metric-value">{value}<small>{unit}</small></div><span className="metric-caption">{chosen?.event_type === 'match' ? 'Match day' : chosen ? 'Training session' : 'No session data'}</span></article>)}</div>
       <section className="surface chart-card"><div className="chart-title"><div><h3>Session output comparison</h3><p className="muted">Distance in metres · max speed in km/h</p></div><span className="chart-legend"><i className="legend-bar" /> Distance <i className="legend-line" /> Speed {canCompare && <><i className="legend-average" /> Team average</>}</span></div>
-        {chartData.length > 0 ? <div className="chart-area"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={[...chartData].reverse()} margin={{ top: 12, right: 10, bottom: 4, left: 0 }}><CartesianGrid stroke="#edf1f7" vertical={false} /><XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} /><YAxis yAxisId="distance" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} width={54} /><YAxis yAxisId="speed" orientation="right" domain={[0, 40]} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} width={36} /><Tooltip /><Bar yAxisId="distance" dataKey="Total distance" fill="#ff6b00" radius={[5, 5, 0, 0]} maxBarSize={26} /><Bar yAxisId="distance" dataKey="HSR" fill="#8db7f5" radius={[5, 5, 0, 0]} maxBarSize={26} /><Bar yAxisId="distance" dataKey="HML distance" fill="#cbd5e1" radius={[5, 5, 0, 0]} maxBarSize={26} /><Line yAxisId="speed" dataKey="Max speed" stroke="#1e3a8a" strokeWidth={2.5} dot={{ r: 3, fill: '#1e3a8a' }} /><Line yAxisId="speed" dataKey="Team average" stroke="#1e3a8a" strokeWidth={1.5} strokeDasharray="5 4" dot={false} /></ComposedChart></ResponsiveContainer></div> : <div className="empty-state">No GPS sessions have been recorded yet.</div>}
-        {canCompare && comparable.length > 0 && <div className="average-row"><span><i className="average-dash" /> Squad average — Max speed <strong>{average('max_speed').toFixed(1)} km/h</strong></span><span>Total distance <strong>{format.format(Math.round(average('total_distance')))} m</strong></span><span>HSR <strong>{format.format(Math.round(average('hsr_distance')))} m</strong></span><span>HML <strong>{format.format(Math.round(average('hml_distance')))} m</strong></span></div>}
+        {chartData.length > 0 ? <div className="chart-area"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={[...chartData].reverse()} margin={{ top: 12, right: 10, bottom: 4, left: 0 }}><CartesianGrid stroke="#edf1f7" vertical={false} /><XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} /><YAxis yAxisId="distance" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} width={54} /><YAxis yAxisId="speed" orientation="right" domain={[0, 40]} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} width={36} /><Tooltip /><Bar yAxisId="distance" dataKey="Total distance" fill="#ff6b00" radius={[5, 5, 0, 0]} maxBarSize={26} /><Bar yAxisId="distance" dataKey="HSR" fill="#8db7f5" radius={[5, 5, 0, 0]} maxBarSize={26} /><Line yAxisId="speed" dataKey="Max speed" stroke="#1e3a8a" strokeWidth={2.5} dot={{ r: 3, fill: '#1e3a8a' }} /><Line yAxisId="speed" dataKey="Team average" stroke="#1e3a8a" strokeWidth={1.5} strokeDasharray="5 4" dot={false} /></ComposedChart></ResponsiveContainer></div> : <div className="empty-state">No GPS sessions have been recorded yet.</div>}
+        {canCompare && comparable.length > 0 && <div className="average-row"><span><i className="average-dash" /> Squad average — Max speed <strong>{average('max_speed').toFixed(1)} km/h</strong></span><span>Total distance <strong>{format.format(Math.round(average('total_distance')))} m</strong></span><span>HSR <strong>{format.format(Math.round(average('hsr_distance')))} m</strong></span></div>}
       </section>
     </div>
   )

@@ -28,9 +28,15 @@ export interface Checkin {
   submitted_at?: string
 }
 
-export interface GpsMetric {
+export interface GpsMetricProfile {
   id: string
+  full_name: string
+  avatar_url: string | null
+}
+
+export interface GpsMetric {
   player_id: string
+  session_id: string
   date: string
   event_type: 'training' | 'match'
   total_distance: number
@@ -38,9 +44,9 @@ export interface GpsMetric {
   max_speed: number
   hsr_distance: number
   sprint_count: number
-  accel_decel_count: number
-  hml_distance: number
-  fatigue_index: number
+  accelerations: number
+  decelerations: number
+  profiles?: GpsMetricProfile | GpsMetricProfile[] | null
 }
 
 export interface ActivityStat {

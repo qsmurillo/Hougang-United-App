@@ -92,30 +92,37 @@ function App() {
       }
       if (!supabase) throw new Error('Supabase is not configured.')
       const profileQuery = supabase.from('profiles').select('id, full_name, role, team_id, squad_number, position, birth_date, nationality, photo_url, teams(name)')
-      const idsOrSelf = profile.role === 'player' ? [authenticatedUserId] : undefined
-      const [profileResult, gpsResult, activityResult, eventResult, goalResult, checkinResult, messageResult] = await Promise.all([
-        idsOrSelf ? profileQuery.eq('id', authenticatedUserId) : profileQuery.eq('role', 'player'),
-        supabase.from('gps_metrics').select('*'),
+      const profileResult = profile.role === 'player'
+        ? await profileQuery.eq('id', authenticatedUserId)
+        : await profileQuery.eq('role', 'player')
+      if (profileResult.error) throw profileResult.error
+      const loadedProfiles = (profileResult.data ?? []) as unknown as Profile[]
+      setProfiles(loadedProfiles)
+      setSquad((profile.teams?.name ?? 'SPL1') as Squad)
+      setSelectedId(profile.role === 'player' ? authenticatedUserId : loadedProfiles[0]?.id ?? '')
+
+      const [gpsResult, activityResult, eventResult, goalResult, checkinResult, messageResult] = await Promise.all([
+        supabase.from('gps_metrics').select('player_id, session_id, date, event_type, total_distance, dist_per_min, max_speed, hsr_distance, sprint_count, accelerations, decelerations, profiles(id, full_name, avatar_url:photo_url)'),
         supabase.from('activity_stats').select('*'),
         profile.role === 'player' ? supabase.from('calendar_events').select('*').eq('team_id', profile.team_id) : supabase.from('calendar_events').select('*'),
         supabase.from('individual_goals').select('*, goal_reviews(*)'),
         supabase.from('daily_checkins').select('*'),
         supabase.from('chat_messages').select('*'),
       ])
-      const failed = [profileResult, gpsResult, activityResult, eventResult, goalResult, checkinResult, messageResult].find((result) => result.error)
+      const failed = [gpsResult, activityResult, eventResult, goalResult, checkinResult, messageResult].find((result) => result.error)
       if (failed?.error) throw failed.error
-      const loadedProfiles = (profileResult.data ?? []) as unknown as Profile[]
-      setProfiles(loadedProfiles)
       setMetrics((gpsResult.data ?? []) as GpsMetric[])
       setActivities((activityResult.data ?? []) as ActivityStat[])
       setEvents((eventResult.data ?? []) as CalendarEvent[])
       setGoals((goalResult.data ?? []) as unknown as IndividualGoal[])
       setCheckins((checkinResult.data ?? []) as Checkin[])
       setMessages((messageResult.data ?? []) as ChatMessage[])
-      setSquad((profile.teams?.name ?? 'SPL1') as Squad)
-      setSelectedId(profile.role === 'player' ? authenticatedUserId : loadedProfiles[0]?.id ?? '')
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : 'Unable to load club data.'
+      const message = caught instanceof Error
+        ? caught.message
+        : typeof caught === 'object' && caught !== null && 'message' in caught && typeof caught.message === 'string'
+          ? caught.message
+          : 'Unable to load club data.'
       setLoadError(message)
       throw caught
     } finally {
@@ -381,7 +388,7 @@ function App() {
           {loadingData && <div className="loading-bar"><span /></div>}
           <div className="main-inner">
             <div className="breadcrumb"><span>PERFORMANCE HUB</span><span>/</span><strong>{squad} SQUAD</strong><span>/</span><span>{activeTab?.label.toUpperCase()}</span></div>
-            <section className="profile-banner"><div className="profile-photo">{selectedPlayer?.photo_url ? <img src={selectedPlayer.photo_url} alt={`${selectedPlayer.full_name} profile`} /> : <span>{initials(selectedPlayer?.full_name ?? '?')}</span>}<i /></div><div className="profile-main"><div className="profile-meta"><span className="squad-badge">{selectedPlayer?.teams?.name ?? squad}</span><span className="profile-member">{role === 'player' ? 'PLAYER PROFILE' : 'SELECTED PLAYER'}</span></div><h1>{selectedPlayer?.full_name ?? 'Select a player'}</h1><div className="profile-details"><span className="shirt-number">#{selectedPlayer?.squad_number ?? '—'}</span><span>{selectedPlayer?.position ?? 'Position not set'}</span><i />{selectedPlayer?.birth_date && <span>{calculateAge(selectedPlayer.birth_date)} years old</span>}{selectedPlayer?.nationality && <span className="nationality-badge">{nationalityFlags[selectedPlayer.nationality] ?? '🌐'} <b>{selectedPlayer.nationality}</b></span>}</div></div><div className="profile-banner-side"><div className="profile-status"><span /> ACTIVE SQUAD</div><div className="profile-season">{selectedPlayer?.teams?.name ?? squad}<small>2025 / 26</small></div></div></section>
+            <section className="profile-banner"><div className="profile-photo">{selectedPlayer?.photo_url ? <img className="object-cover object-top" src={selectedPlayer.photo_url} alt={`${selectedPlayer.full_name} profile`} /> : <span>{initials(selectedPlayer?.full_name ?? '?')}</span>}<i /></div><div className="profile-main"><div className="profile-meta"><span className="squad-badge">{selectedPlayer?.teams?.name ?? squad}</span><span className="profile-member">{role === 'player' ? 'PLAYER PROFILE' : 'SELECTED PLAYER'}</span></div><h1>{selectedPlayer?.full_name ?? 'Select a player'}</h1><div className="profile-details"><span className="shirt-number">#{selectedPlayer?.squad_number ?? '—'}</span><span>{selectedPlayer?.position ?? 'Position not set'}</span><i />{selectedPlayer?.birth_date && <span>{calculateAge(selectedPlayer.birth_date)} years old</span>}{selectedPlayer?.nationality && <span className="nationality-badge">{nationalityFlags[selectedPlayer.nationality] ?? '🌐'} <b>{selectedPlayer.nationality}</b></span>}</div></div><div className="profile-banner-side"><div className="profile-status"><span /> ACTIVE SQUAD</div><div className="profile-season">{selectedPlayer?.teams?.name ?? squad}<small>2025 / 26</small></div></div></section>
             <nav className="tab-navigation" aria-label="Main navigation">{tabs.map(({ id, number, label, icon: Icon }) => <button key={id} className={tab === id ? 'tab-button active' : 'tab-button'} onClick={() => { setTab(id); setMobileNav(false) }}><Icon size={17} /><span className="tab-number">{number}</span><span>{label}</span>{tab === id && <i />}</button>)}</nav>
             <div className="main-toolbar"><div><h2>{activeTab?.label}</h2><p>{tab === 'checkin' ? 'Wellbeing first. Performance follows.' : tab === 'activity' ? 'The work behind every match-day moment.' : tab === 'calendar' ? 'Plan ahead and be ready for every session.' : tab === 'goals' ? 'Focus on what moves you forward.' : 'A direct line to your coaching team.'}</p></div><div className="toolbar-right"><span className="live-tag"><i /> LIVE SQUAD DATA</span><div className="toolbar-divider" /><div className="toolbar-player"><span>VIEWING</span><strong>{navName.split(' ')[0]} <ChevronDown size={13} /></strong></div></div></div>
             <Suspense fallback={<div className="loading-panel">Loading performance data…</div>}><div className="tab-content" key={tab}>

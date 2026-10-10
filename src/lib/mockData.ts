@@ -30,8 +30,8 @@ export const mockGps: GpsMetric[] = mockProfiles.flatMap((profile, index) =>
     Array.from({ length: 3 }, (_, dayIndex) => {
       const sessionIndex = weekIndex * 3 + dayIndex
       return {
-        id: `gps-${index}-${sessionIndex}`,
         player_id: profile.id,
+        session_id: `session-${sessionIndex}`,
         date: new Date(Date.now() - ((5 - weekIndex) * 7 + (2 - dayIndex) * 2) * 86400000).toISOString().slice(0, 10),
         event_type: (index + sessionIndex) % 5 === 0 ? 'match' as const : 'training' as const,
         total_distance: 6400 + ((index * 173 + sessionIndex * 211) % 5100),
@@ -39,9 +39,8 @@ export const mockGps: GpsMetric[] = mockProfiles.flatMap((profile, index) =>
         max_speed: 27 + ((index * 13 + sessionIndex * 5) % 92) / 10,
         hsr_distance: 280 + ((index * 41 + sessionIndex * 29) % 710),
         sprint_count: 8 + ((index + sessionIndex * 2) % 24),
-        accel_decel_count: 44 + ((index * 11 + sessionIndex * 7) % 85),
-        hml_distance: 510 + ((index * 53 + sessionIndex * 37) % 1120),
-        fatigue_index: 2 + ((index * 7 + sessionIndex * 4) % 80) / 10,
+        accelerations: 22 + ((index * 5 + sessionIndex * 3) % 45),
+        decelerations: 22 + ((index * 6 + sessionIndex * 4) % 45),
       }
     }),
   ).flat(),

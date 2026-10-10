@@ -15,7 +15,7 @@ interface PlayerListProps {
 function PlayerAvatar({ player }: { player: Profile }) {
   return (
     <span className="roster-avatar">
-      {player.photo_url ? <img src={player.photo_url} alt="" /> : initials(player.full_name)}
+      {player.photo_url ? <img className="object-cover object-top" src={player.photo_url} alt="" /> : initials(player.full_name)}
     </span>
   )
 }
