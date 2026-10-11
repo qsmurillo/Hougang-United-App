@@ -36,16 +36,17 @@ export interface GpsMetricProfile {
 
 export interface GpsMetric {
   player_id: string
-  session_id: string
+  session_id?: string | null
   date: string
-  event_type: 'training' | 'match'
+  event_type?: 'training' | 'match' | null
   total_distance: number
   dist_per_min: number
   max_speed: number
   hsr_distance: number
+  hml_distance?: number | null
   sprint_count: number
-  accelerations: number
-  decelerations: number
+  accelerations?: number | null
+  decelerations?: number | null
   profiles?: GpsMetricProfile | GpsMetricProfile[] | null
 }
 

@@ -70,3 +70,16 @@
 .player-form-error{margin:0;color:#b23d3d;font-size:11px}
 .player-delete-content .player-form-error{margin:0 0 16px}
 @media(max-width:480px){.player-modal-backdrop{padding:10px}.player-modal{max-height:calc(100vh - 20px)}.player-form{gap:11px;padding:16px}.player-modal-header{padding:16px}.player-form-field{font-size:10px}.player-row-actions button span{font-size:7px}}
+
+.gps-sessions{overflow:hidden;padding:16px}
+.gps-sessions .chart-title{margin-bottom:12px}
+.gps-session-scroll{max-width:100%;overflow-x:auto}
+.gps-session-table{width:100%;min-width:480px;border-collapse:collapse;text-align:left}
+.gps-session-table th{padding:9px 10px;border-bottom:1px solid #edf0f4;color:#8d98a9;font-size:9px;font-weight:700}
+.gps-session-table td{padding:10px;border-bottom:1px solid #f0f2f6;color:#526078;font-size:10px}
+.gps-session-table tbody tr:last-child td{border-bottom:0}
+.gps-event-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:700}
+.gps-event-badge.training{background:#eaf2ff;color:#315a9d}
+.gps-event-badge.match{background:#fff0e5;color:#b64c00}
+.gps-event-badge.unknown{background:#f1f3f6;color:#778195}
+.gps-session-empty{text-align:center}

@@ -38,6 +38,7 @@ export const mockGps: GpsMetric[] = mockProfiles.flatMap((profile, index) =>
         dist_per_min: 82 + ((index * 7 + sessionIndex * 3) % 31),
         max_speed: 27 + ((index * 13 + sessionIndex * 5) % 92) / 10,
         hsr_distance: 280 + ((index * 41 + sessionIndex * 29) % 710),
+        hml_distance: 510 + ((index * 53 + sessionIndex * 37) % 1120),
         sprint_count: 8 + ((index + sessionIndex * 2) % 24),
         accelerations: 22 + ((index * 5 + sessionIndex * 3) % 45),
         decelerations: 22 + ((index * 6 + sessionIndex * 4) % 45),

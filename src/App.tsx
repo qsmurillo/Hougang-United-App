@@ -102,7 +102,7 @@ function App() {
       setSelectedId(profile.role === 'player' ? authenticatedUserId : loadedProfiles[0]?.id ?? '')
 
       const [gpsResult, activityResult, eventResult, goalResult, checkinResult, messageResult] = await Promise.all([
-        supabase.from('gps_metrics').select('player_id, session_id, date, event_type, total_distance, dist_per_min, max_speed, hsr_distance, sprint_count, accelerations, decelerations, profiles(id, full_name, avatar_url:photo_url)'),
+        supabase.from('gps_metrics').select('*, profiles(id, full_name, avatar_url:photo_url)'),
         supabase.from('activity_stats').select('*'),
         profile.role === 'player' ? supabase.from('calendar_events').select('*').eq('team_id', profile.team_id) : supabase.from('calendar_events').select('*'),
         supabase.from('individual_goals').select('*, goal_reviews(*)'),

@@ -55,6 +55,7 @@ create table if not exists public.daily_checkins (
 create table if not exists public.gps_metrics (
   id uuid primary key default gen_random_uuid(),
   player_id uuid not null references public.profiles(id) on delete cascade,
+  session_id text not null default gen_random_uuid()::text,
   date date not null,
   event_type text not null check (event_type in ('training', 'match')),
   total_distance integer not null default 0 check (total_distance >= 0),
@@ -66,6 +67,11 @@ create table if not exists public.gps_metrics (
   hml_distance integer not null default 0 check (hml_distance >= 0),
   fatigue_index numeric(5,2) not null default 0 check (fatigue_index >= 0)
 );
+
+alter table public.gps_metrics add column if not exists session_id text;
+update public.gps_metrics set session_id = gen_random_uuid()::text where session_id is null;
+alter table public.gps_metrics alter column session_id set default gen_random_uuid()::text;
+alter table public.gps_metrics alter column session_id set not null;
 
 create table if not exists public.activity_stats (
   id uuid primary key default gen_random_uuid(),

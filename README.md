@@ -46,7 +46,7 @@ npm install
 
 1. Create a Supabase project and open **SQL Editor**.
 2. Run [`supabase/01_schema.sql`](./supabase/01_schema.sql) to create the production schema, triggers, grants, and RLS policies. It contains no sample data or mock auth users.
-   When upgrading an existing project, run the updated schema as well; it removes the old Auth-user foreign key so admins can manage roster-only player profiles. Players added from the roster form are profile records and do not create Supabase Auth accounts.
+   When upgrading an existing project, run the updated schema as well; it removes the old Auth-user foreign key so admins can manage roster-only player profiles, and adds generated session IDs to existing GPS records. Players added from the roster form are profile records and do not create Supabase Auth accounts.
 3. Provision the two squad rows before creating/inviting users. For production, run this small, intentional data setup separately in the SQL Editor:
 
    ```sql
