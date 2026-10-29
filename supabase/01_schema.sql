@@ -63,15 +63,17 @@ create table if not exists public.gps_metrics (
   max_speed numeric(5,2) not null default 0 check (max_speed >= 0),
   hsr_distance integer not null default 0 check (hsr_distance >= 0),
   sprint_count integer not null default 0 check (sprint_count >= 0),
-  accel_decel_count integer not null default 0 check (accel_decel_count >= 0),
-  hml_distance integer not null default 0 check (hml_distance >= 0),
-  fatigue_index numeric(5,2) not null default 0 check (fatigue_index >= 0)
+  accelerations integer check (accelerations >= 0),
+  decelerations integer check (decelerations >= 0),
+  hml_distance integer not null default 0 check (hml_distance >= 0)
 );
 
 alter table public.gps_metrics add column if not exists session_id text;
 update public.gps_metrics set session_id = gen_random_uuid()::text where session_id is null;
 alter table public.gps_metrics alter column session_id set default gen_random_uuid()::text;
 alter table public.gps_metrics alter column session_id set not null;
+alter table public.gps_metrics add column if not exists accelerations integer check (accelerations >= 0);
+alter table public.gps_metrics add column if not exists decelerations integer check (decelerations >= 0);
 
 create table if not exists public.activity_stats (
   id uuid primary key default gen_random_uuid(),
@@ -241,6 +243,7 @@ drop policy if exists "Players read own activity" on public.activity_stats;
 drop policy if exists "Admins manage all events" on public.calendar_events;
 drop policy if exists "Team members read events" on public.calendar_events;
 drop policy if exists "Officials read all events" on public.calendar_events;
+drop policy if exists "Authenticated users read all events" on public.calendar_events;
 drop policy if exists "Admins manage all goals" on public.individual_goals;
 drop policy if exists "Officials read all goals" on public.individual_goals;
 drop policy if exists "Players manage own goals" on public.individual_goals;
@@ -287,8 +290,8 @@ create policy "Players read own activity" on public.activity_stats
 
 create policy "Admins manage all events" on public.calendar_events
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
-create policy "Team members read events" on public.calendar_events
-  for select to authenticated using (team_id = public.current_user_team());
+create policy "Authenticated users read all events" on public.calendar_events
+  for select to authenticated using (true);
 create policy "Officials read all events" on public.calendar_events
   for select to authenticated using (public.current_user_role() = 'official');
 

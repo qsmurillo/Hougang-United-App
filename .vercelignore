@@ -1,0 +1,6 @@
+.env*
+.git
+.vercel
+dist
+node_modules
+Hougang United App - profiles.csv

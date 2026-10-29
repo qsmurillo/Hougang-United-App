@@ -1,6 +1,6 @@
 # Hougang United Performance Hub
 
-A responsive React and Supabase application for the SPL1 and SPL2 squads. It includes daily wellbeing check-ins, GPS/performance reporting, season activity, a squad calendar, player development goals, and player-to-coach messaging.
+A responsive React and Supabase application for the SPL1 and SPL2 squads. It includes daily wellbeing check-ins, GPS/performance reporting, season activity, a squad calendar, and player development goals.
 
 ## Stack and structure
 
@@ -14,7 +14,6 @@ src/
   App.tsx                    Authentication, data access, role-aware app shell
   components/
     CalendarTab.tsx          Month, week, year views and event details
-    ChatTab.tsx              Coach/player conversation
     CheckinTab.tsx           Player wellbeing check-in
     GoalsTab.tsx             Development goals and reviews
     LoginScreen.tsx          Supabase email/password login and local preview
@@ -30,6 +29,7 @@ src/
 supabase/
   01_schema.sql              Tables, constraints, triggers, grants, and RLS policies
   02_local_seed.sql          Synthetic local-development teams, accounts, and metrics
+  04_calendar_events_shared_read.sql Allows authenticated users to read both squads' events
 ```
 
 ## Run locally
@@ -47,6 +47,8 @@ npm install
 1. Create a Supabase project and open **SQL Editor**.
 2. Run [`supabase/01_schema.sql`](./supabase/01_schema.sql) to create the production schema, triggers, grants, and RLS policies. It contains no sample data or mock auth users.
    When upgrading an existing project, run the updated schema as well; it removes the old Auth-user foreign key so admins can manage roster-only player profiles, and adds generated session IDs to existing GPS records. Players added from the roster form are profile records and do not create Supabase Auth accounts.
+   Run [`supabase/03_remove_unused_gps_metrics.sql`](./supabase/03_remove_unused_gps_metrics.sql) to remove the unused GPS metric columns from an existing database. This permanently deletes their stored values.
+   Run [`supabase/04_calendar_events_shared_read.sql`](./supabase/04_calendar_events_shared_read.sql) to let every authenticated squad member read both SPL1 and SPL2 calendar events.
 3. Provision the two squad rows before creating/inviting users. For production, run this small, intentional data setup separately in the SQL Editor:
 
    ```sql

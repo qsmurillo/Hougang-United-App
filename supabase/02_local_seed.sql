@@ -73,7 +73,7 @@ begin
       for day_index in 0..2 loop
         session_date := current_date - ((5 - session_index) * 7 + (2 - day_index) * 2);
 
-        insert into public.gps_metrics (player_id, date, event_type, total_distance, dist_per_min, max_speed, hsr_distance, sprint_count, accel_decel_count, hml_distance, fatigue_index)
+        insert into public.gps_metrics (player_id, date, event_type, total_distance, dist_per_min, max_speed, hsr_distance, sprint_count, accelerations, decelerations, hml_distance)
         select
           uid, session_date,
           case when (i + session_index * 3 + day_index) % 5 = 0 then 'match' else 'training' end,
@@ -82,9 +82,9 @@ begin
           27 + ((i * 13 + session_index * 5 + day_index * 3) % 92) / 10.0,
           280 + ((i * 41 + session_index * 29 + day_index * 17) % 710),
           8 + ((i + session_index * 2 + day_index) % 24),
-          44 + ((i * 11 + session_index * 7 + day_index * 5) % 85),
-          510 + ((i * 53 + session_index * 37 + day_index * 23) % 1120),
-          2 + ((i * 7 + session_index * 4 + day_index * 2) % 80) / 10.0
+          18 + ((i * 5 + session_index * 3 + day_index * 2) % 48),
+          16 + ((i * 7 + session_index * 4 + day_index * 3) % 46),
+          510 + ((i * 53 + session_index * 37 + day_index * 23) % 1120)
         where not exists (
           select 1 from public.gps_metrics m where m.player_id = uid and m.date = session_date
         );

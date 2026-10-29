@@ -1,4 +1,4 @@
-import type { ActivityStat, CalendarEvent, ChatMessage, Checkin, GpsMetric, IndividualGoal, Profile, Squad } from '../types'
+import type { ActivityStat, CalendarEvent, Checkin, GpsMetric, IndividualGoal, Profile, Squad } from '../types'
 
 const names = [
   'Ethan Tan','Lucas Lim','Noah Lee','Ryan Wong','Kai Chen','Aiden Ng','Dylan Koh','Jasper Goh','Liam Teo','Mason Chua',
@@ -84,12 +84,6 @@ export const mockGoals: IndividualGoal[] = mockProfiles.filter((_, index) => [0,
   { id: `${profile.id}-goal-2`, player_id: profile.id, title: 'Communicate early', description: 'Give clear information in defensive transitions.', category: 'Communication', start_value: 2, current_value: 3, target_value: 4 },
   { id: `${profile.id}-goal-3`, player_id: profile.id, title: 'Repeated sprint capacity', description: 'Improve repeated high-intensity effort.', category: 'Fitness', start_value: 1, current_value: 2, target_value: 4 },
 ])
-
-export const mockMessages: ChatMessage[] = [
-  { id: 'message-1', player_id: 'player-1', sender_id: 'coach', message: 'Great work at training today, Ethan. Keep building on that first touch.', created_at: new Date(Date.now() - 3600000 * 4).toISOString() },
-  { id: 'message-2', player_id: 'player-1', sender_id: 'player-1', message: 'Thanks coach! I will keep working on scanning before I receive.', created_at: new Date(Date.now() - 3600000 * 3).toISOString() },
-  { id: 'message-3', player_id: 'player-1', sender_id: 'coach', message: 'Perfect. Let us check in after the match on Saturday.', created_at: new Date(Date.now() - 3600000 * 2).toISOString() },
-]
 
 export function teamIdForSquad(squad: Squad): string {
   return mockTeams[squad]

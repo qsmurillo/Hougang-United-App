@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { Activity, ArrowUpRight, Bell, CalendarDays, CheckCircle2, ChevronDown, LayoutGrid, LogOut, Menu, MessageCircle, Plus, Search, ShieldCheck, Table2, Target, Users, X } from 'lucide-react'
-import { ChatTab } from './components/ChatTab'
+import { Activity, ArrowUpRight, Bell, CalendarDays, CheckCircle2, ChevronDown, LayoutGrid, LogOut, Menu, Plus, Search, ShieldCheck, Table2, Target, Users, X } from 'lucide-react'
 import { CalendarTab } from './components/CalendarTab'
 import { CheckinTab } from './components/CheckinTab'
 import { GoalsTab } from './components/GoalsTab'
@@ -8,14 +7,14 @@ import { LoginScreen } from './components/LoginScreen'
 import { PlayerList } from './components/PlayerList'
 import PlayerManagementModal, { type PlayerDraft } from './components/PlayerManagementModal'
 import { calculateAge, initials } from './lib/format'
-import { mockActivity, mockCheckins, mockEvents, mockGoals, mockGps, mockMessages, mockProfiles, mockTeams, teamIdForSquad } from './lib/mockData'
+import { mockActivity, mockCheckins, mockEvents, mockGoals, mockGps, mockProfiles, mockTeams, teamIdForSquad } from './lib/mockData'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
-import type { ActivityStat, CalendarEvent, ChatMessage, Checkin, GoalReview, GpsMetric, IndividualGoal, Profile, Role, Squad } from './types'
+import type { ActivityStat, CalendarEvent, Checkin, GoalReview, GpsMetric, IndividualGoal, Profile, Role, Squad } from './types'
 
 const ActivityTab = lazy(() => import('./components/PerformanceTabs').then((module) => ({ default: module.ActivityTab })))
 const GpsTab = lazy(() => import('./components/PerformanceTabs').then((module) => ({ default: module.GpsTab })))
 
-type TabId = 'checkin' | 'activity' | 'calendar' | 'goals' | 'chat'
+type TabId = 'checkin' | 'activity' | 'calendar' | 'goals'
 type Notice = { type: 'success' | 'error'; text: string } | null
 
 const tabs: { id: TabId; label: string; number: string; icon: typeof Activity }[] = [
@@ -23,7 +22,6 @@ const tabs: { id: TabId; label: string; number: string; icon: typeof Activity }[
   { id: 'activity', number: '02', label: 'Activity', icon: Activity },
   { id: 'calendar', number: '03', label: 'Calendar', icon: CalendarDays },
   { id: 'goals', number: '04', label: 'Individual goals', icon: Target },
-  { id: 'chat', number: '05', label: 'Coach chat', icon: MessageCircle },
 ]
 const nationalityFlags: Record<string, string> = { Singapore: '🇸🇬', Malaysia: '🇲🇾', Japan: '🇯🇵' }
 
@@ -43,7 +41,6 @@ function App() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [goals, setGoals] = useState<IndividualGoal[]>([])
   const [checkins, setCheckins] = useState<Checkin[]>([])
-  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [squad, setSquad] = useState<Squad>('SPL1')
   const [selectedId, setSelectedId] = useState('')
   const [tab, setTab] = useState<TabId>('checkin')
@@ -67,7 +64,6 @@ function App() {
   const squadMetrics = useMemo(() => metrics.filter((metric) => squadIds.has(metric.player_id)), [metrics, squadIds])
   const selectedCheckin = checkins.find((checkin) => checkin.player_id === selectedPlayer?.id && checkin.date === new Date().toISOString().slice(0, 10))
   const playerGoals = goals.filter((goal) => goal.player_id === selectedPlayer?.id)
-  const playerMessages = messages.filter((message) => message.player_id === selectedPlayer?.id).sort((a, b) => a.created_at.localeCompare(b.created_at))
   const selectedStat = activities.find((activity) => activity.player_id === selectedPlayer?.id)
 
   const notify = useCallback((type: 'success' | 'error', text: string) => {
@@ -86,7 +82,6 @@ function App() {
         setEvents(mockEvents)
         setGoals(mockGoals)
         setCheckins(mockCheckins)
-        setMessages(mockMessages)
         setSelectedId(mockProfiles[0].id)
         return
       }
@@ -101,22 +96,20 @@ function App() {
       setSquad((profile.teams?.name ?? 'SPL1') as Squad)
       setSelectedId(profile.role === 'player' ? authenticatedUserId : loadedProfiles[0]?.id ?? '')
 
-      const [gpsResult, activityResult, eventResult, goalResult, checkinResult, messageResult] = await Promise.all([
-        supabase.from('gps_metrics').select('*, profiles(id, full_name, avatar_url:photo_url)'),
+      const [gpsResult, activityResult, eventResult, goalResult, checkinResult] = await Promise.all([
+        supabase.from('gps_metrics').select('id, player_id, session_id, date, event_type, total_distance, dist_per_min, max_speed, hsr_distance, hml_distance, sprint_count, accelerations, decelerations, profiles(id, full_name, avatar_url:photo_url)'),
         supabase.from('activity_stats').select('*'),
-        profile.role === 'player' ? supabase.from('calendar_events').select('*').eq('team_id', profile.team_id) : supabase.from('calendar_events').select('*'),
+        supabase.from('calendar_events').select('*'),
         supabase.from('individual_goals').select('*, goal_reviews(*)'),
         supabase.from('daily_checkins').select('*'),
-        supabase.from('chat_messages').select('*'),
       ])
-      const failed = [gpsResult, activityResult, eventResult, goalResult, checkinResult, messageResult].find((result) => result.error)
+      const failed = [gpsResult, activityResult, eventResult, goalResult, checkinResult].find((result) => result.error)
       if (failed?.error) throw failed.error
       setMetrics((gpsResult.data ?? []) as GpsMetric[])
       setActivities((activityResult.data ?? []) as ActivityStat[])
       setEvents((eventResult.data ?? []) as CalendarEvent[])
       setGoals((goalResult.data ?? []) as unknown as IndividualGoal[])
       setCheckins((checkinResult.data ?? []) as Checkin[])
-      setMessages((messageResult.data ?? []) as ChatMessage[])
     } catch (caught) {
       const message = caught instanceof Error
         ? caught.message
@@ -334,17 +327,6 @@ function App() {
     notify('success', 'Goal deleted.')
   }
 
-  async function sendMessage(text: string) {
-    if (!selectedPlayer) throw new Error('Select a player to send a message.')
-    const record: ChatMessage = { id: `message-${Date.now()}`, player_id: selectedPlayer.id, sender_id: viewerId, message: text, created_at: new Date().toISOString() }
-    if (demo) setMessages((previous) => [...previous, record])
-    else if (supabase) {
-      const { data, error } = await supabase.from('chat_messages').insert({ player_id: selectedPlayer.id, sender_id: viewerId, message: text }).select().single()
-      if (error) { notify('error', `Message could not be sent: ${error.message}`); throw error }
-      setMessages((previous) => [...previous, data as ChatMessage])
-    }
-  }
-
   if (!demo && !selfProfile) return <LoginScreen onLogin={login} onDemo={() => void enterDemo()} error={loginError} loading={loadingLogin} />
 
   const navName = selectedPlayer?.full_name ?? selfProfile?.full_name ?? 'Your squad'
@@ -390,13 +372,12 @@ function App() {
             <div className="breadcrumb"><span>PERFORMANCE HUB</span><span>/</span><strong>{squad} SQUAD</strong><span>/</span><span>{activeTab?.label.toUpperCase()}</span></div>
             <section className="profile-banner"><div className="profile-photo">{selectedPlayer?.photo_url ? <img className="object-cover object-top" src={selectedPlayer.photo_url} alt={`${selectedPlayer.full_name} profile`} /> : <span>{initials(selectedPlayer?.full_name ?? '?')}</span>}<i /></div><div className="profile-main"><div className="profile-meta"><span className="squad-badge">{selectedPlayer?.teams?.name ?? squad}</span><span className="profile-member">{role === 'player' ? 'PLAYER PROFILE' : 'SELECTED PLAYER'}</span></div><h1>{selectedPlayer?.full_name ?? 'Select a player'}</h1><div className="profile-details"><span className="shirt-number">#{selectedPlayer?.squad_number ?? '—'}</span><span>{selectedPlayer?.position ?? 'Position not set'}</span><i />{selectedPlayer?.birth_date && <span>{calculateAge(selectedPlayer.birth_date)} years old</span>}{selectedPlayer?.nationality && <span className="nationality-badge">{nationalityFlags[selectedPlayer.nationality] ?? '🌐'} <b>{selectedPlayer.nationality}</b></span>}</div></div><div className="profile-banner-side"><div className="profile-status"><span /> ACTIVE SQUAD</div><div className="profile-season">{selectedPlayer?.teams?.name ?? squad}<small>2025 / 26</small></div></div></section>
             <nav className="tab-navigation" aria-label="Main navigation">{tabs.map(({ id, number, label, icon: Icon }) => <button key={id} className={tab === id ? 'tab-button active' : 'tab-button'} onClick={() => { setTab(id); setMobileNav(false) }}><Icon size={17} /><span className="tab-number">{number}</span><span>{label}</span>{tab === id && <i />}</button>)}</nav>
-            <div className="main-toolbar"><div><h2>{activeTab?.label}</h2><p>{tab === 'checkin' ? 'Wellbeing first. Performance follows.' : tab === 'activity' ? 'The work behind every match-day moment.' : tab === 'calendar' ? 'Plan ahead and be ready for every session.' : tab === 'goals' ? 'Focus on what moves you forward.' : 'A direct line to your coaching team.'}</p></div><div className="toolbar-right"><span className="live-tag"><i /> LIVE SQUAD DATA</span><div className="toolbar-divider" /><div className="toolbar-player"><span>VIEWING</span><strong>{navName.split(' ')[0]} <ChevronDown size={13} /></strong></div></div></div>
+            <div className="main-toolbar"><div><h2>{activeTab?.label}</h2><p>{tab === 'checkin' ? 'Wellbeing first. Performance follows.' : tab === 'activity' ? 'The work behind every match-day moment.' : tab === 'calendar' ? 'Plan ahead and be ready for every session.' : 'Focus on what moves you forward.'}</p></div><div className="toolbar-right"><span className="live-tag"><i /> LIVE SQUAD DATA</span><div className="toolbar-divider" /><div className="toolbar-player"><span>VIEWING</span><strong>{navName.split(' ')[0]} <ChevronDown size={13} /></strong></div></div></div>
             <Suspense fallback={<div className="loading-panel">Loading performance data…</div>}><div className="tab-content" key={tab}>
               {tab === 'checkin' && <><CheckinTab key={selectedPlayer?.id} existing={selectedCheckin} onSubmit={submitCheckin} canEdit={role === 'player' || role === 'admin'} submitted={Boolean(selectedCheckin)} />{isStaff && <div className="coach-dashboard"><div className="coach-dashboard-heading"><div><span className="coach-label"><Activity size={14} /> COACH DASHBOARD</span><h2>GPS &amp; training load</h2></div><button className="text-link" onClick={() => setTab('activity')}>Full activity <ArrowUpRight size={15} /></button></div><GpsTab metrics={squadMetrics} profiles={squadProfiles} selectedPlayer={selectedPlayer} canCompare={isStaff} /></div>}</>}
               {tab === 'activity' && <><ActivityTab stat={selectedStat} metrics={metrics} checkins={checkins} selectedPlayer={selectedPlayer} />{isStaff && <section className="staff-gps-section"><GpsTab metrics={squadMetrics} profiles={squadProfiles} selectedPlayer={selectedPlayer} canCompare /></section>}</>}
-              {tab === 'calendar' && <CalendarTab events={events.filter((event) => event.team_id === teamIdForSquad(squad))} />}
+              {tab === 'calendar' && <CalendarTab events={events} />}
               {tab === 'goals' && <GoalsTab key={selectedPlayer?.id} goals={playerGoals} canEdit={role === 'player' || role === 'admin'} onAdd={addGoal} onSaveReview={saveReview} onDelete={deleteGoal} />}
-              {tab === 'chat' && <ChatTab key={selectedPlayer?.id} messages={playerMessages} profile={selectedPlayer} viewerId={viewerId} canSend={Boolean(selectedPlayer) && (role === 'player' || role === 'admin')} onSend={sendMessage} />}
             </div></Suspense>
             <footer className="main-footer"><span>HOUGANG UNITED <b>·</b> PERFORMANCE HUB</span><span>PLAYER DEVELOPMENT, TOGETHER <span className="footer-star">✳</span></span></footer>
           </div>

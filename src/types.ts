@@ -1,6 +1,6 @@
 export type Role = 'admin' | 'official' | 'player'
 export type Squad = 'SPL1' | 'SPL2'
-export type EventType = 'match' | 'training' | 'meeting'
+export type EventType = 'match' | 'training' | 'meeting' | (string & {})
 export type GoalCategory = 'Communication' | 'Decision-making' | 'Execution' | 'Fitness'
 
 export interface Profile {
@@ -35,10 +35,11 @@ export interface GpsMetricProfile {
 }
 
 export interface GpsMetric {
+  id?: string
   player_id: string
   session_id?: string | null
   date: string
-  event_type?: 'training' | 'match' | null
+  event_type?: string | null
   total_distance: number
   dist_per_min: number
   max_speed: number
@@ -93,12 +94,4 @@ export interface IndividualGoal {
   current_value: number
   target_value: number
   goal_reviews?: GoalReview[]
-}
-
-export interface ChatMessage {
-  id: string
-  player_id: string
-  sender_id: string
-  message: string
-  created_at: string
 }
