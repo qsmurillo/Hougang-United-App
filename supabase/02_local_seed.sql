@@ -66,7 +66,7 @@ begin
       set team_id = excluded.team_id, squad_number = excluded.squad_number;
 
     insert into public.activity_stats (player_id, season, minutes_played, started_matches, sub_matches, training_attendance_pct, total_goals, total_assists)
-    values (uid, '2025/26', 360 + ((i * 37) % 1100), 4 + (i % 14), i % 8, 72 + ((i * 3) % 27), i % 9, (i * 2) % 7)
+    values (uid, '2026/27', 360 + ((i * 37) % 1100), 4 + (i % 14), i % 8, 72 + ((i * 3) % 27), i % 9, (i * 2) % 7)
     on conflict (player_id, season) do nothing;
 
     for session_index in 0..5 loop

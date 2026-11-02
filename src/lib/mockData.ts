@@ -60,7 +60,7 @@ export const mockCheckins: Checkin[] = mockGps.map((metric, index) => ({
 export const mockActivity: ActivityStat[] = mockProfiles.map((profile, index) => ({
   id: `activity-${index}`,
   player_id: profile.id,
-  season: '2025/26',
+  season: '2026/27',
   minutes_played: 360 + ((index * 37) % 1100),
   started_matches: 4 + (index % 14),
   sub_matches: index % 8,
