@@ -53,7 +53,7 @@ export const mockCheckins: Checkin[] = mockGps.map((metric, index) => ({
   sleep_hours: 6 + (index % 5) * 0.5,
   emotional_fatigue_1to5: 2 + (index % 4),
   nutrition_ok: index % 6 !== 0,
-  hydration_ok: index % 7 !== 0,
+  hydratation_ok: index % 7 !== 0,
   session_rpe_0to10: 4 + (index % 6),
 }))
 

@@ -20,13 +20,26 @@ export interface Checkin {
   id?: string
   player_id: string
   date: string
-  sleep_hours: number
-  emotional_fatigue_1to5: number
-  nutrition_ok: boolean
-  hydration_ok: boolean
-  session_rpe_0to10: number
+  sleep_hours: number | null
+  emotional_fatigue_1to5: number | null
+  nutrition_ok: boolean | null
+  hydratation_ok: boolean | null
+  session_rpe_0to10: number | null
   submitted_at?: string
 }
+
+export type CheckinSubmission =
+  | {
+      date: string
+      sleep_hours: number
+      emotional_fatigue_1to5: number
+      nutrition_ok: boolean
+      hydratation_ok: boolean
+    }
+  | {
+      date: string
+      session_rpe_0to10: number
+    }
 
 export interface GpsMetricProfile {
   id: string

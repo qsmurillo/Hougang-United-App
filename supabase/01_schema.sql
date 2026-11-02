@@ -43,11 +43,11 @@ create table if not exists public.daily_checkins (
   id uuid primary key default gen_random_uuid(),
   player_id uuid not null references public.profiles(id) on delete cascade,
   date date not null default current_date,
-  sleep_hours numeric(3,1) not null check (sleep_hours between 0 and 24),
-  emotional_fatigue_1to5 smallint not null check (emotional_fatigue_1to5 between 1 and 5),
-  nutrition_ok boolean not null default false,
-  hydration_ok boolean not null default false,
-  session_rpe_0to10 smallint not null check (session_rpe_0to10 between 0 and 10),
+  sleep_hours numeric(3,1) check (sleep_hours between 0 and 24),
+  emotional_fatigue_1to5 smallint check (emotional_fatigue_1to5 between 1 and 5),
+  nutrition_ok boolean,
+  hydratation_ok boolean,
+  session_rpe_0to10 smallint check (session_rpe_0to10 between 0 and 10),
   submitted_at timestamptz not null default now(),
   unique (player_id, date)
 );

@@ -1,16 +1,32 @@
 import { Fragment, useMemo, useState } from 'react'
 import { Activity, ChevronDown, Footprints, Gauge, MoveUpRight, PersonStanding, Waves, Zap } from 'lucide-react'
-import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import type { ActivityStat, Checkin, GpsMetric, Profile } from '../types'
+import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import type { TooltipProps } from 'recharts'
+import type { ActivityStat, CalendarEvent, Checkin, GpsMetric, Profile } from '../types'
 
 interface GpsTabProps {
   metrics: GpsMetric[]
   profiles: Profile[]
+  events: CalendarEvent[]
   selectedPlayer: Profile | null
   canCompare: boolean
 }
 
 const format = new Intl.NumberFormat('en-SG')
+
+interface SessionChartPoint {
+  maxSpeed: number
+  totalDistance: number
+  hsrDistance: number
+  hmlDistance: number | null
+  accelerations: number | null
+  decelerations: number | null
+  date: string
+  dateLabel: string
+  eventType: 'training' | 'match' | null
+  sessionId: string | null
+  playerName: string
+}
 
 function formatSessionDate(date: string | null | undefined, options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }) {
   if (!date) return '—'
@@ -23,29 +39,78 @@ function normalizeEventType(eventType: string | null | undefined): 'training' | 
   return normalized === 'training' || normalized === 'match' ? normalized : null
 }
 
-export function GpsTab({ metrics, profiles, selectedPlayer, canCompare }: GpsTabProps) {
+function SessionChartTooltip({ active, payload }: TooltipProps<number, string>) {
+  const session = payload?.[0]?.payload as SessionChartPoint | undefined
+  if (!active || !session) return null
+
+  const details = [
+    { label: 'Total distance', value: session.totalDistance == null ? '—' : `${format.format(session.totalDistance)} m` },
+    { label: 'High-speed running / HSR', value: session.hsrDistance == null ? '—' : `${format.format(session.hsrDistance)} m` },
+    { label: 'HML distance', value: session.hmlDistance == null ? '—' : `${format.format(session.hmlDistance)} m` },
+    { label: 'Max speed', value: session.maxSpeed == null ? '—' : `${format.format(session.maxSpeed)} km/h` },
+    { label: 'Accelerations', value: session.accelerations == null ? '—' : format.format(session.accelerations), tone: 'acceleration' },
+    { label: 'Decelerations', value: session.decelerations == null ? '—' : format.format(session.decelerations), tone: 'deceleration' },
+  ]
+
+  return (
+    <div className="gps-chart-tooltip">
+      <div className="gps-chart-tooltip-heading">
+        <strong>{session.date ? formatSessionDate(session.date, { day: 'numeric', month: 'short', year: 'numeric' }) : session.dateLabel}</strong>
+        <span className={`gps-event-badge ${session.eventType ?? 'unknown'}`}>{session.eventType === 'match' ? 'Match' : session.eventType === 'training' ? 'Training' : 'Unknown'}</span>
+      </div>
+      <p>{session.playerName}{session.sessionId ? ` · ${session.sessionId}` : ''}</p>
+      <dl>
+        {details.map(({ label, value, tone }) => <div key={label} className={tone ? `gps-chart-tooltip-${tone}` : ''}><dt>{label}</dt><dd>{value}</dd></div>)}
+      </dl>
+    </div>
+  )
+}
+
+export function GpsTab({ metrics, profiles, events, selectedPlayer, canCompare }: GpsTabProps) {
   const [eventFilter, setEventFilter] = useState<'all' | 'training' | 'match'>('all')
   const [sort, setSort] = useState('newest')
   const [expandedSession, setExpandedSession] = useState<string | null>(null)
   const playerIds = useMemo(() => new Set(profiles.map((profile) => profile.id)), [profiles])
+  const teamIds = useMemo(() => new Set(profiles.map((profile) => profile.team_id)), [profiles])
+  const eventTypeByDate = useMemo(() => {
+    const types = new Map<string, 'training' | 'match'>()
+    events.forEach((event) => {
+      if (!teamIds.has(event.team_id)) return
+      const eventType = normalizeEventType(event.event_type)
+      if (eventType === 'match' || (eventType === 'training' && !types.has(event.date))) types.set(event.date, eventType)
+    })
+    return types
+  }, [events, teamIds])
+  const getEventType = (metric: GpsMetric) => {
+    const metricEventType = metric.event_type?.trim()
+    return metricEventType ? normalizeEventType(metricEventType) : eventTypeByDate.get(metric.date) ?? null
+  }
   const current = metrics.filter((metric) => playerIds.has(metric.player_id) && (!selectedPlayer || metric.player_id === selectedPlayer.id))
-  const filtered = current.filter((metric) => eventFilter === 'all' || normalizeEventType(metric.event_type) === eventFilter).sort((a, b) => {
+  const filtered = current.filter((metric) => eventFilter === 'all' || getEventType(metric) === eventFilter).sort((a, b) => {
     if (sort === 'lowest') return a.total_distance - b.total_distance
     if (sort === 'highest') return b.total_distance - a.total_distance
     return sort === 'oldest' ? (a.date ?? '').localeCompare(b.date ?? '') : (b.date ?? '').localeCompare(a.date ?? '')
   })
   const chosen = filtered[0]
-  const comparable = metrics.filter((metric) => playerIds.has(metric.player_id) && (eventFilter === 'all' || normalizeEventType(metric.event_type) === eventFilter))
+  const chosenEventType = chosen ? getEventType(chosen) : null
+  const comparable = metrics.filter((metric) => playerIds.has(metric.player_id) && (eventFilter === 'all' || getEventType(metric) === eventFilter))
   const average = (key: 'max_speed' | 'total_distance' | 'hsr_distance') => comparable.length ? comparable.reduce((sum, row) => sum + Number(row[key]), 0) / comparable.length : 0
-  const chartData = filtered.slice(0, 8).map((metric) => ({
-    name: formatSessionDate(metric.date),
-    'Total Distance': metric.total_distance,
-    'High Speed Running': metric.hsr_distance,
-    'HML Distance': metric.hml_distance ?? null,
-    'Max. speed': metric.max_speed,
-    Accelerations: metric.accelerations ?? null,
-    Decelerations: metric.decelerations ?? null,
-  }))
+  const chartData: SessionChartPoint[] = [...filtered]
+    .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+    .slice(-8)
+    .map((metric) => ({
+      maxSpeed: metric.max_speed,
+      totalDistance: metric.total_distance,
+      hsrDistance: metric.hsr_distance,
+      hmlDistance: metric.hml_distance ?? null,
+      accelerations: metric.accelerations ?? null,
+      decelerations: metric.decelerations ?? null,
+      date: metric.date,
+      dateLabel: formatSessionDate(metric.date),
+      eventType: getEventType(metric),
+      sessionId: metric.session_id ?? null,
+      playerName: profiles.find((profile) => profile.id === metric.player_id)?.full_name ?? selectedPlayer?.full_name ?? 'Player',
+    }))
   const metricsCards = [
     { label: 'Total distance', value: chosen ? `${format.format(chosen.total_distance)}` : '—', unit: 'm', icon: Footprints, color: 'blue' },
     { label: 'Distance / min', value: chosen ? `${chosen.dist_per_min}` : '—', unit: 'm/min', icon: Activity, color: 'orange' },
@@ -56,23 +121,14 @@ export function GpsTab({ metrics, profiles, selectedPlayer, canCompare }: GpsTab
     { label: 'Accelerations', value: chosen?.accelerations != null ? `${chosen.accelerations}` : '—', unit: 'actions', icon: PersonStanding, color: 'blue' },
     { label: 'Decelerations', value: chosen?.decelerations != null ? `${chosen.decelerations}` : '—', unit: 'actions', icon: Activity, color: 'green' },
   ]
-  const chartUnits: Record<string, string> = {
-    'Total Distance': 'm',
-    'High Speed Running': 'm',
-    'HML Distance': 'm',
-    'Max. speed': 'km/h',
-    Accelerations: 'count',
-    Decelerations: 'count',
-  }
-
   return (
     <div className="tab-stack">
       <div className="section-heading gps-heading"><div><p className="eyebrow">PERFORMANCE MONITORING</p><h2>Training load &amp; GPS</h2><p className="muted">{selectedPlayer ? `Latest available session for ${selectedPlayer.full_name}.` : 'Session metrics across the selected squad.'}</p></div>
-        <div className="filter-controls"><div className="segmented-control">{(['all', 'training', 'match'] as const).map((filter) => <button key={filter} onClick={() => setEventFilter(filter)} className={eventFilter === filter ? 'selected' : ''}>{filter === 'all' ? 'All sessions' : filter[0].toUpperCase() + filter.slice(1)}</button>)}</div><select aria-label="Sort sessions" className="select-control" value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="lowest">Distance ↑</option><option value="highest">Distance ↓</option></select></div>
+      <div className="filter-controls"><select aria-label="Sort sessions" className="select-control" value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="lowest">Distance ↑</option><option value="highest">Distance ↓</option></select></div>
       </div>
       {canCompare && comparable.length > 1 && <div className="benchmark-note"><span className="benchmark-dot" /> Team average benchmark is anonymized and includes {comparable.length} session{comparable.length === 1 ? '' : 's'}.</div>}
       {!canCompare && <div className="benchmark-note personal-note">Only your personal performance records are visible to your player account.</div>}
-      <div className="metric-grid">{metricsCards.map(({ label, value, unit, icon: Icon, color }) => <article className="surface metric-card" key={label}><div className={`metric-icon ${color}`}><Icon size={18} /></div><p>{label}</p><div className="metric-value">{value}<small>{unit}</small></div><span className="metric-caption">{normalizeEventType(chosen?.event_type) === 'match' ? 'Match day' : normalizeEventType(chosen?.event_type) === 'training' ? 'Training session' : chosen ? 'Session type unavailable' : 'No session data'}</span></article>)}</div>
+      <div className="metric-grid">{metricsCards.map(({ label, value, unit, icon: Icon, color }) => <article className="surface metric-card" key={label}><div className={`metric-icon ${color}`}><Icon size={18} /></div><p>{label}</p><div className="metric-value">{value}<small>{unit}</small></div><span className="metric-caption">{chosenEventType === 'match' ? 'Match day' : chosenEventType === 'training' ? 'Training session' : chosen ? 'Session type unavailable' : 'No session data'}</span></article>)}</div>
       <section className="surface gps-sessions">
         <div className="chart-title"><div><h3>Session records</h3><p className="muted">Date, event type, and session identifier. Expand a session to view its GPS metrics.</p></div></div>
         <div className="gps-session-scroll">
@@ -81,7 +137,7 @@ export function GpsTab({ metrics, profiles, selectedPlayer, canCompare }: GpsTab
             <tbody>
               {filtered.length ? filtered.map((metric, index) => {
                 const rowId = metric.id ?? `${metric.player_id}-${metric.session_id ?? metric.date ?? 'session'}-${index}`
-                const eventType = normalizeEventType(metric.event_type)
+                const eventType = getEventType(metric)
                 const isExpanded = expandedSession === rowId
                 const playerName = profiles.find((profile) => profile.id === metric.player_id)?.full_name ?? selectedPlayer?.full_name ?? 'Player'
                 const details = [
@@ -110,8 +166,8 @@ export function GpsTab({ metrics, profiles, selectedPlayer, canCompare }: GpsTab
           </table>
         </div>
       </section>
-      <section className="surface chart-card"><div className="chart-title"><div><h3>Session output comparison</h3><p className="muted">Distance (m), maximum speed (km/h), and acceleration counts use separate scales.</p></div><div className="gps-chart-legend">{[['#ff6b00', 'Total distance'], ['#8db7f5', 'High-speed running'], ['#9333ea', 'HML distance'], ['#1e3a8a', 'Max. speed'], ['#16a34a', 'Accelerations'], ['#e11d48', 'Decelerations']].map(([color, label]) => <span key={label}><i style={{ background: color }} />{label}</span>)}</div></div>
-        {chartData.length > 0 ? <div className="chart-area"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={[...chartData].reverse()} margin={{ top: 12, right: 90, bottom: 4, left: 0 }}><CartesianGrid stroke="#edf1f7" vertical={false} /><XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} /><YAxis yAxisId="distance" unit="m" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} width={54} /><YAxis yAxisId="speed" orientation="right" domain={[0, 'auto']} unit="km/h" tickLine={false} axisLine={false} tick={{ fill: '#1e3a8a', fontSize: 11 }} width={42} /><YAxis yAxisId="count" orientation="right" offset={42} domain={[0, 'auto']} tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11 }} width={42} /><Tooltip formatter={(value, name) => [`${format.format(Number(value))} ${chartUnits[String(name)] ?? ''}`.trim(), name]} labelFormatter={(label) => `Session · ${label}`} /><Bar yAxisId="distance" dataKey="Total Distance" fill="#ff6b00" radius={[4, 4, 0, 0]} maxBarSize={18} /><Bar yAxisId="distance" dataKey="High Speed Running" fill="#8db7f5" radius={[4, 4, 0, 0]} maxBarSize={18} /><Bar yAxisId="distance" dataKey="HML Distance" fill="#9333ea" radius={[4, 4, 0, 0]} maxBarSize={18} /><Bar yAxisId="count" dataKey="Accelerations" fill="#16a34a" radius={[4, 4, 0, 0]} maxBarSize={18} /><Bar yAxisId="count" dataKey="Decelerations" fill="#e11d48" radius={[4, 4, 0, 0]} maxBarSize={18} /><Line yAxisId="speed" dataKey="Max. speed" stroke="#1e3a8a" strokeWidth={2.5} dot={{ r: 3, fill: '#1e3a8a' }} connectNulls={false} /></ComposedChart></ResponsiveContainer></div> : <div className="empty-state">No GPS sessions have been recorded yet.</div>}
+      <section className="surface chart-card"><div className="chart-title"><div><h3>Session output comparison</h3><p className="muted">Distance is shown as a shaded area; intensity and speed are shown as smooth lines.</p></div><div className="gps-chart-controls"><div className="segmented-control" role="group" aria-label="Filter sessions by event type">{(['all', 'match', 'training'] as const).map((filter) => <button key={filter} type="button" aria-pressed={eventFilter === filter} onClick={() => setEventFilter(filter)} className={eventFilter === filter ? 'selected' : ''}>{filter === 'all' ? 'All Sessions' : filter === 'match' ? 'Matches Only' : 'Trainings Only'}</button>)}</div><div className="gps-chart-legend"><span><i className="gps-chart-total-distance" />Total distance</span><span><i className="gps-chart-hsr" />HSR</span><span><i className="gps-chart-hml" />HML distance</span><span><i className="gps-chart-speed" />Max speed</span><span><i className="gps-chart-accelerations" />Accelerations</span><span><i className="gps-chart-decelerations" />Decelerations</span></div></div></div>
+        {chartData.length > 0 ? <div className="chart-area gps-area-line-chart"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={chartData} margin={{ top: 12, right: 12, bottom: 4, left: 4 }}><CartesianGrid stroke="#edf1f7" vertical={false} /><XAxis dataKey="dateLabel" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} /><YAxis yAxisId="distance" tickLine={false} axisLine={false} tick={{ fill: '#65738a', fontSize: 10 }} width={54} label={{ value: 'Distance (m) / count', angle: -90, position: 'insideLeft', fill: '#8490a2', fontSize: 9 }} /><YAxis yAxisId="speed" orientation="right" domain={[0, 35]} ticks={[0, 5, 10, 15, 20, 25, 30, 35]} unit=" km/h" tickLine={false} axisLine={false} tick={{ fill: '#1e3a8a', fontSize: 10 }} width={62} /><Tooltip content={<SessionChartTooltip />} /><Area yAxisId="distance" type="monotone" dataKey="totalDistance" name="Total distance" stroke="#ff6b00" strokeWidth={2} fill="#ff6b00" fillOpacity={0.12} connectNulls={false} /><Line yAxisId="distance" type="monotone" dataKey="hsrDistance" name="HSR" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} /><Line yAxisId="distance" type="monotone" dataKey="hmlDistance" name="HML distance" stroke="#9333ea" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} /><Line yAxisId="speed" type="monotone" dataKey="maxSpeed" name="Max speed" stroke="#1e3a8a" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} /><Line yAxisId="distance" type="monotone" dataKey="accelerations" name="Accelerations" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} /><Line yAxisId="distance" type="monotone" dataKey="decelerations" name="Decelerations" stroke="#e11d48" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} /></ComposedChart></ResponsiveContainer></div> : <div className="empty-state">No sessions match this filter.</div>}
         {canCompare && comparable.length > 0 && <div className="average-row"><span><i className="average-dash" /> Squad average — Max speed <strong>{average('max_speed').toFixed(1)} km/h</strong></span><span>Total distance <strong>{format.format(Math.round(average('total_distance')))} m</strong></span><span>HSR <strong>{format.format(Math.round(average('hsr_distance')))} m</strong></span></div>}
       </section>
     </div>

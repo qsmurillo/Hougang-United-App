@@ -16,7 +16,7 @@ import {
   subYears,
 } from 'date-fns'
 import type { CSSProperties } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, MapPin } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, MapPin } from 'lucide-react'
 import type { CalendarEvent } from '../types'
 
 interface CalendarTabProps {
@@ -76,6 +76,22 @@ function getEventCategories(events: CalendarEvent[]) {
   return [...new Set(events.map(getEventCategory))]
 }
 
+function EventCardContent({ event }: { event: CalendarEvent }) {
+  return (
+    <>
+      <span className="day-event-heading">
+        <span className="day-event-time">{formatEventTime(event.time)}</span>
+        <span className="day-event-title">{displayText(event.title)}</span>
+      </span>
+      {displayText(event.opponent) && <span className="day-event-opponent">vs {displayText(event.opponent)}</span>}
+      {displayText(event.location) && (
+        <span className="day-event-location"><MapPin size={10} aria-hidden="true" />{displayText(event.location)}</span>
+      )}
+      {displayText(event.details) && <span className="day-event-details">{displayText(event.details)}</span>}
+    </>
+  )
+}
+
 interface PositionedEvent {
   event: CalendarEvent
   minute: number
@@ -133,7 +149,6 @@ export function CalendarTab({ events }: CalendarTabProps) {
   }, [uniqueEvents])
 
   const getEvents = (date: Date) => eventsByDate.get(format(date, 'yyyy-MM-dd')) ?? []
-  const dayEvents = getEvents(selected)
   const weekDays = eachDayOfInterval({
     start: startOfWeek(selected, { weekStartsOn: 1 }),
     end: endOfWeek(selected, { weekStartsOn: 1 }),
@@ -287,23 +302,56 @@ export function CalendarTab({ events }: CalendarTabProps) {
                             width: `calc(${100 / laneCount}% - 4px)`,
                           }
                           return (
-                            <button
+                            <article
                               className={`week-event ${getEventClass(event)}`}
                               key={event.id}
                               style={style}
                               title={`${formatEventTime(event.time)} ${displayText(event.title)}`}
-                              aria-label={`${formatEventTime(event.time)} ${displayText(event.title)}, ${categoryLabels[getEventCategory(event)]}`}
-                              onClick={() => setSelected(date)}
+                              aria-label={`${formatEventTime(event.time)} ${displayText(event.title)}, ${displayText(event.location)}, ${categoryLabels[getEventCategory(event)]}`}
                             >
                               <strong>{displayText(event.title)}</strong>
                               <span>{formatEventTime(event.time)}</span>
-                            </button>
+                              {displayText(event.location) && (
+                                <span className="week-event-location">
+                                  <MapPin size={10} aria-hidden="true" />
+                                  <span>{displayText(event.location)}</span>
+                                </span>
+                              )}
+                            </article>
                           )
                         })}
                       </div>
                     ))}
                   </div>
                 </div>
+              </div>
+              <div className="week-mobile-agenda">
+                {weekDays.map((date) => {
+                  const dateEvents = getEvents(date)
+                  return (
+                    <section className="week-agenda-day" key={date.toISOString()}>
+                      <button
+                        className={`week-agenda-date ${isSameDay(date, selected) ? 'selected' : ''}`}
+                        onClick={() => setSelected(date)}
+                        aria-label={`Select ${format(date, 'EEEE, MMMM d, yyyy')}`}
+                      >
+                        <span>{format(date, 'EEEE')}</span>
+                        <strong>{format(date, 'd MMMM')}</strong>
+                      </button>
+                      {dateEvents.length > 0 ? (
+                        <div className="week-agenda-events">
+                          {dateEvents.map((event) => (
+                            <article className={`week-agenda-event ${getEventClass(event)}`} key={event.id}>
+                              <EventCardContent event={event} />
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="week-agenda-empty">No events</p>
+                      )}
+                    </section>
+                  )
+                })}
               </div>
             </div>
           ) : (
@@ -312,26 +360,63 @@ export function CalendarTab({ events }: CalendarTabProps) {
               <div className="calendar-days">
                 {monthDays.map((date) => {
                   const dateEvents = getEvents(date)
-                  const categories = getEventCategories(dateEvents)
-                  const categoryNames = categories.map((category) => categoryLabels[category]).join(', ')
+                  const eventSummary = dateEvents.map((event) => [
+                    categoryLabels[getEventCategory(event)],
+                    formatEventTime(event.time),
+                    displayText(event.title),
+                    displayText(event.opponent) && `vs ${displayText(event.opponent)}`,
+                    displayText(event.location),
+                    displayText(event.details),
+                  ].filter(Boolean).join(', ')).join('. ')
                   return (
                     <button
                       key={date.toISOString()}
                       className={`calendar-day ${!isSameMonth(date, month) ? 'outside' : ''} ${isSameDay(date, selected) ? 'selected' : ''}`}
                       onClick={() => setSelected(date)}
-                      aria-label={`${format(date, 'EEEE, MMMM d')}${dateEvents.length ? `, ${dateEvents.length} events: ${categoryNames}` : ', no events'}`}
+                      aria-label={`${format(date, 'EEEE, MMMM d')}${dateEvents.length ? `, ${dateEvents.length} events: ${eventSummary}` : ', no events'}`}
                     >
                       <span className="calendar-date">{format(date, 'd')}</span>
-                      <span className="day-event-dots" aria-hidden="true">
-                        {categories.map((category) => <i className={eventClasses[category]} key={category} />)}
+                      <span className="day-event-list">
+                        {dateEvents.map((event) => (
+                          <span className={`day-event ${getEventClass(event)}`} key={event.id}>
+                            <EventCardContent event={event} />
+                          </span>
+                        ))}
                       </span>
-                      {dateEvents.slice(0, 2).map((event) => (
-                        <span className={`day-event ${getEventClass(event)}`} key={event.id}>{displayText(event.title)}</span>
-                      ))}
-                      {dateEvents.length > 2 && <span className="day-event-overflow">+{dateEvents.length - 2} more</span>}
                     </button>
                   )
                 })}
+              </div>
+              <div className="month-mobile-agenda">
+                {monthDays.filter((date) => isSameMonth(date, month)).map((date) => {
+                  const dateEvents = getEvents(date)
+                  if (dateEvents.length === 0) return null
+
+                  return (
+                    <section className="month-agenda-day" key={date.toISOString()}>
+                      <button
+                        className={`month-agenda-date ${isSameDay(date, selected) ? 'selected' : ''}`}
+                        onClick={() => setSelected(date)}
+                        aria-label={`Select ${format(date, 'EEEE, MMMM d, yyyy')}`}
+                      >
+                        <span>{format(date, 'EEEE')}</span>
+                        <strong>{format(date, 'd MMMM')}</strong>
+                      </button>
+                      <div className="month-agenda-events">
+                        {dateEvents.map((event) => (
+                          <article className={`month-agenda-event ${getEventClass(event)}`} key={event.id}>
+                            <EventCardContent event={event} />
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  )
+                })}
+                {monthDays
+                  .filter((date) => isSameMonth(date, month))
+                  .every((date) => getEvents(date).length === 0) && (
+                  <p className="month-agenda-empty">No events scheduled this month.</p>
+                )}
               </div>
             </div>
           )}
@@ -341,33 +426,6 @@ export function CalendarTab({ events }: CalendarTabProps) {
           </button>
         </section>
 
-        <aside className="surface day-detail">
-          <div className="detail-date">
-            <div>
-              <p className="eyebrow">SELECTED DAY</p>
-              <h3>{format(selected, 'EEEE')}</h3>
-              <strong>{format(selected, 'd MMMM yyyy')}</strong>
-            </div>
-            <span className="detail-day">{format(selected, 'dd')}</span>
-          </div>
-          <div className="detail-event-list">
-            {dayEvents.length ? dayEvents.map((event) => (
-              <article className={`detail-event ${getEventClass(event)}`} key={event.id}>
-                <div className="event-time"><Clock3 size={14} />{formatEventTime(event.time)}</div>
-                <h4>{displayText(event.title)}</h4>
-                <p><MapPin size={14} />{displayText(event.location)}</p>
-                {displayText(event.opponent) && <div className="opponent">vs. {displayText(event.opponent)}</div>}
-                {displayText(event.details) && <p className="event-details">{displayText(event.details)}</p>}
-              </article>
-            )) : (
-              <div className="empty-day">
-                <span>◷</span>
-                <strong>A clear day</strong>
-                <p>There are no events scheduled.</p>
-              </div>
-            )}
-          </div>
-        </aside>
       </div>
     </div>
   )

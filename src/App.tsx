@@ -6,10 +6,10 @@ import { GoalsTab } from './components/GoalsTab'
 import { LoginScreen } from './components/LoginScreen'
 import { PlayerList } from './components/PlayerList'
 import PlayerManagementModal, { type PlayerDraft } from './components/PlayerManagementModal'
-import { calculateAge, initials } from './lib/format'
+import { calculateAge, initials, localDateKey, nationalityFlag } from './lib/format'
 import { mockActivity, mockCheckins, mockEvents, mockGoals, mockGps, mockProfiles, mockTeams, teamIdForSquad } from './lib/mockData'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
-import type { ActivityStat, CalendarEvent, Checkin, GoalReview, GpsMetric, IndividualGoal, Profile, Role, Squad } from './types'
+import type { ActivityStat, CalendarEvent, Checkin, CheckinSubmission, GoalReview, GpsMetric, IndividualGoal, Profile, Role, Squad } from './types'
 
 const ActivityTab = lazy(() => import('./components/PerformanceTabs').then((module) => ({ default: module.ActivityTab })))
 const GpsTab = lazy(() => import('./components/PerformanceTabs').then((module) => ({ default: module.GpsTab })))
@@ -23,8 +23,6 @@ const tabs: { id: TabId; label: string; number: string; icon: typeof Activity }[
   { id: 'calendar', number: '03', label: 'Calendar', icon: CalendarDays },
   { id: 'goals', number: '04', label: 'Individual goals', icon: Target },
 ]
-const nationalityFlags: Record<string, string> = { Singapore: '🇸🇬', Malaysia: '🇲🇾', Japan: '🇯🇵' }
-
 function App() {
   const [userId, setUserId] = useState<string | null>(null)
   const [selfProfile, setSelfProfile] = useState<Profile | null>(null)
@@ -62,7 +60,7 @@ function App() {
   const shownProfiles = useMemo(() => squadProfiles.filter((profile) => profile.full_name.toLowerCase().includes(search.toLowerCase())), [squadProfiles, search])
   const squadIds = useMemo(() => new Set(squadProfiles.map((profile) => profile.id)), [squadProfiles])
   const squadMetrics = useMemo(() => metrics.filter((metric) => squadIds.has(metric.player_id)), [metrics, squadIds])
-  const selectedCheckin = checkins.find((checkin) => checkin.player_id === selectedPlayer?.id && checkin.date === new Date().toISOString().slice(0, 10))
+  const selectedCheckin = checkins.find((checkin) => checkin.player_id === selectedPlayer?.id && checkin.date === localDateKey())
   const playerGoals = goals.filter((goal) => goal.player_id === selectedPlayer?.id)
   const selectedStat = activities.find((activity) => activity.player_id === selectedPlayer?.id)
 
@@ -96,20 +94,29 @@ function App() {
       setSquad((profile.teams?.name ?? 'SPL1') as Squad)
       setSelectedId(profile.role === 'player' ? authenticatedUserId : loadedProfiles[0]?.id ?? '')
 
-      const [gpsResult, activityResult, eventResult, goalResult, checkinResult] = await Promise.all([
+      const initialPlayerId = profile.role === 'player' ? authenticatedUserId : loadedProfiles[0]?.id
+      const todayCheckinQuery = initialPlayerId
+        ? supabase.from('daily_checkins').select('*').eq('player_id', initialPlayerId).eq('date', localDateKey()).maybeSingle()
+        : Promise.resolve({ data: null, error: null })
+      const [gpsResult, activityResult, eventResult, goalResult, checkinResult, todayCheckinResult] = await Promise.all([
         supabase.from('gps_metrics').select('id, player_id, session_id, date, event_type, total_distance, dist_per_min, max_speed, hsr_distance, hml_distance, sprint_count, accelerations, decelerations, profiles(id, full_name, avatar_url:photo_url)'),
         supabase.from('activity_stats').select('*'),
         supabase.from('calendar_events').select('*'),
         supabase.from('individual_goals').select('*, goal_reviews(*)'),
         supabase.from('daily_checkins').select('*'),
+        todayCheckinQuery,
       ])
-      const failed = [gpsResult, activityResult, eventResult, goalResult, checkinResult].find((result) => result.error)
+      const failed = [gpsResult, activityResult, eventResult, goalResult, checkinResult, todayCheckinResult].find((result) => result.error)
       if (failed?.error) throw failed.error
       setMetrics((gpsResult.data ?? []) as GpsMetric[])
       setActivities((activityResult.data ?? []) as ActivityStat[])
       setEvents((eventResult.data ?? []) as CalendarEvent[])
       setGoals((goalResult.data ?? []) as unknown as IndividualGoal[])
-      setCheckins((checkinResult.data ?? []) as Checkin[])
+      const loadedCheckins = (checkinResult.data ?? []) as Checkin[]
+      const todayCheckin = todayCheckinResult.data as Checkin | null
+      setCheckins(todayCheckin
+        ? [...loadedCheckins.filter((checkin) => checkin.id !== todayCheckin.id), todayCheckin]
+        : loadedCheckins)
     } catch (caught) {
       const message = caught instanceof Error
         ? caught.message
@@ -277,14 +284,35 @@ function App() {
     else { setMenuOpen(false); setSelfProfile(null); setProfiles([]) }
   }
 
-  async function submitCheckin(payload: Omit<Checkin, 'player_id'>) {
+  async function submitCheckin(payload: CheckinSubmission) {
     if (!selectedPlayer) throw new Error('Select a player before submitting a check-in.')
-    const record: Checkin = { ...payload, player_id: selectedPlayer.id, submitted_at: new Date().toISOString() }
-    if (demo) setCheckins((previous) => [...previous.filter((item) => item.player_id !== record.player_id || item.date !== record.date), record])
+    const playerId = selectedPlayer.id
+    const submittedAt = new Date().toISOString()
+    if (demo) setCheckins((previous) => {
+      const existing = previous.find((item) => item.player_id === playerId && item.date === payload.date)
+      const updated: Checkin = {
+        id: existing?.id,
+        player_id: playerId,
+        submitted_at: submittedAt,
+        date: payload.date,
+        sleep_hours: 'sleep_hours' in payload ? payload.sleep_hours : existing?.sleep_hours ?? null,
+        emotional_fatigue_1to5: 'emotional_fatigue_1to5' in payload ? payload.emotional_fatigue_1to5 : existing?.emotional_fatigue_1to5 ?? null,
+        nutrition_ok: 'nutrition_ok' in payload ? payload.nutrition_ok : existing?.nutrition_ok ?? null,
+        hydratation_ok: 'hydratation_ok' in payload ? payload.hydratation_ok : existing?.hydratation_ok ?? null,
+        session_rpe_0to10: 'session_rpe_0to10' in payload ? payload.session_rpe_0to10 : existing?.session_rpe_0to10 ?? null,
+      }
+      return [...previous.filter((item) => item.player_id !== playerId || item.date !== payload.date), updated]
+    })
     else if (supabase) {
-      const { data, error } = await supabase.from('daily_checkins').upsert(record, { onConflict: 'player_id,date' }).select().single()
-      if (error) { notify('error', `Check-in could not be saved: ${error.message}`); throw error }
-      setCheckins((previous) => [...previous.filter((item) => item.player_id !== record.player_id || item.date !== record.date), data as Checkin])
+      if ('sleep_hours' in payload) {
+        const { data, error } = await supabase.from('daily_checkins').upsert({ ...payload, player_id: playerId, submitted_at: submittedAt }, { onConflict: 'player_id,date' }).select().single()
+        if (error) { notify('error', `Check-in could not be saved: ${error.message}`); throw error }
+        setCheckins((previous) => [...previous.filter((item) => item.player_id !== playerId || item.date !== payload.date), data as Checkin])
+      } else {
+        const { data, error } = await supabase.from('daily_checkins').upsert({ ...payload, player_id: playerId, submitted_at: submittedAt }, { onConflict: 'player_id,date' }).select().single()
+        if (error) { notify('error', `Check-in could not be saved: ${error.message}`); throw error }
+        setCheckins((previous) => [...previous.filter((item) => item.player_id !== playerId || item.date !== payload.date), data as Checkin])
+      }
     }
     notify('success', 'Your daily check-in has been saved.')
   }
@@ -370,12 +398,12 @@ function App() {
           {loadingData && <div className="loading-bar"><span /></div>}
           <div className="main-inner">
             <div className="breadcrumb"><span>PERFORMANCE HUB</span><span>/</span><strong>{squad} SQUAD</strong><span>/</span><span>{activeTab?.label.toUpperCase()}</span></div>
-            <section className="profile-banner"><div className="profile-photo">{selectedPlayer?.photo_url ? <img className="object-cover object-top" src={selectedPlayer.photo_url} alt={`${selectedPlayer.full_name} profile`} /> : <span>{initials(selectedPlayer?.full_name ?? '?')}</span>}<i /></div><div className="profile-main"><div className="profile-meta"><span className="squad-badge">{selectedPlayer?.teams?.name ?? squad}</span><span className="profile-member">{role === 'player' ? 'PLAYER PROFILE' : 'SELECTED PLAYER'}</span></div><h1>{selectedPlayer?.full_name ?? 'Select a player'}</h1><div className="profile-details"><span className="shirt-number">#{selectedPlayer?.squad_number ?? '—'}</span><span>{selectedPlayer?.position ?? 'Position not set'}</span><i />{selectedPlayer?.birth_date && <span>{calculateAge(selectedPlayer.birth_date)} years old</span>}{selectedPlayer?.nationality && <span className="nationality-badge">{nationalityFlags[selectedPlayer.nationality] ?? '🌐'} <b>{selectedPlayer.nationality}</b></span>}</div></div><div className="profile-banner-side"><div className="profile-status"><span /> ACTIVE SQUAD</div><div className="profile-season">{selectedPlayer?.teams?.name ?? squad}<small>2025 / 26</small></div></div></section>
+            <section className="profile-banner"><div className="profile-photo">{selectedPlayer?.photo_url ? <img className="object-cover object-top" src={selectedPlayer.photo_url} alt={`${selectedPlayer.full_name} profile`} /> : <span>{initials(selectedPlayer?.full_name ?? '?')}</span>}<i /></div><div className="profile-main"><div className="profile-meta"><span className="squad-badge">{selectedPlayer?.teams?.name ?? squad}</span><span className="profile-member">{role === 'player' ? 'PLAYER PROFILE' : 'SELECTED PLAYER'}</span></div><h1>{selectedPlayer?.full_name ?? 'Select a player'}</h1><div className="profile-details"><span className="shirt-number">#{selectedPlayer?.squad_number ?? '—'}</span><span>{selectedPlayer?.position ?? 'Position not set'}</span><i />{selectedPlayer?.birth_date && <span>{calculateAge(selectedPlayer.birth_date)} years old</span>}{selectedPlayer?.nationality && <span className="nationality-badge">{nationalityFlag(selectedPlayer.nationality)} <b>{selectedPlayer.nationality}</b></span>}</div></div><div className="profile-banner-side"><div className="profile-status"><span /> ACTIVE SQUAD</div><div className="profile-season">{selectedPlayer?.teams?.name ?? squad}<small>2025 / 26</small></div></div></section>
             <nav className="tab-navigation" aria-label="Main navigation">{tabs.map(({ id, number, label, icon: Icon }) => <button key={id} className={tab === id ? 'tab-button active' : 'tab-button'} onClick={() => { setTab(id); setMobileNav(false) }}><Icon size={17} /><span className="tab-number">{number}</span><span>{label}</span>{tab === id && <i />}</button>)}</nav>
             <div className="main-toolbar"><div><h2>{activeTab?.label}</h2><p>{tab === 'checkin' ? 'Wellbeing first. Performance follows.' : tab === 'activity' ? 'The work behind every match-day moment.' : tab === 'calendar' ? 'Plan ahead and be ready for every session.' : 'Focus on what moves you forward.'}</p></div><div className="toolbar-right"><span className="live-tag"><i /> LIVE SQUAD DATA</span><div className="toolbar-divider" /><div className="toolbar-player"><span>VIEWING</span><strong>{navName.split(' ')[0]} <ChevronDown size={13} /></strong></div></div></div>
             <Suspense fallback={<div className="loading-panel">Loading performance data…</div>}><div className="tab-content" key={tab}>
-              {tab === 'checkin' && <><CheckinTab key={selectedPlayer?.id} existing={selectedCheckin} onSubmit={submitCheckin} canEdit={role === 'player' || role === 'admin'} submitted={Boolean(selectedCheckin)} />{isStaff && <div className="coach-dashboard"><div className="coach-dashboard-heading"><div><span className="coach-label"><Activity size={14} /> COACH DASHBOARD</span><h2>GPS &amp; training load</h2></div><button className="text-link" onClick={() => setTab('activity')}>Full activity <ArrowUpRight size={15} /></button></div><GpsTab metrics={squadMetrics} profiles={squadProfiles} selectedPlayer={selectedPlayer} canCompare={isStaff} /></div>}</>}
-              {tab === 'activity' && <><ActivityTab stat={selectedStat} metrics={metrics} checkins={checkins} selectedPlayer={selectedPlayer} />{isStaff && <section className="staff-gps-section"><GpsTab metrics={squadMetrics} profiles={squadProfiles} selectedPlayer={selectedPlayer} canCompare /></section>}</>}
+              {tab === 'checkin' && <><CheckinTab key={selectedPlayer?.id} existing={selectedCheckin} history={checkins.filter((checkin) => checkin.player_id === selectedPlayer?.id)} onSubmit={submitCheckin} canEdit={role === 'player' || role === 'admin'} />{isStaff && <div className="coach-dashboard"><div className="coach-dashboard-heading"><div><span className="coach-label"><Activity size={14} /> COACH DASHBOARD</span><h2>GPS &amp; training load</h2></div><button className="text-link" onClick={() => setTab('activity')}>Full activity <ArrowUpRight size={15} /></button></div><GpsTab metrics={squadMetrics} profiles={squadProfiles} events={events} selectedPlayer={selectedPlayer} canCompare={isStaff} /></div>}</>}
+              {tab === 'activity' && <><ActivityTab stat={selectedStat} metrics={metrics} checkins={checkins} selectedPlayer={selectedPlayer} />{isStaff && <section className="staff-gps-section"><GpsTab metrics={squadMetrics} profiles={squadProfiles} events={events} selectedPlayer={selectedPlayer} canCompare /></section>}</>}
               {tab === 'calendar' && <CalendarTab events={events} />}
               {tab === 'goals' && <GoalsTab key={selectedPlayer?.id} goals={playerGoals} canEdit={role === 'player' || role === 'admin'} onAdd={addGoal} onSaveReview={saveReview} onDelete={deleteGoal} />}
             </div></Suspense>
