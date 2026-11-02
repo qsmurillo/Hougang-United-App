@@ -1,0 +1,12 @@
+.brand-mark.club-crest {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.brand-mark.club-crest img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { Activity, ArrowRight, LockKeyhole } from 'lucide-react'
+import { ArrowRight, LockKeyhole } from 'lucide-react'
+import { ClubCrest } from './ClubCrest'
 import { isSupabaseConfigured } from '../lib/supabase'
 
 interface LoginScreenProps {
@@ -21,7 +22,7 @@ export function LoginScreen({ onLogin, onDemo, error, loading }: LoginScreenProp
   return (
     <main className="login-shell">
       <section className="login-card">
-        <div className="brand-mark large"><Activity size={28} strokeWidth={2.5} /></div>
+        <ClubCrest large />
         <p className="eyebrow">HOUGANG UNITED FOOTBALL CLUB</p>
         <h1>Performance<br /><span>starts together.</span></h1>
         <p className="login-copy">Your squad, your progress, one place. Sign in to access the club performance hub.</p>
