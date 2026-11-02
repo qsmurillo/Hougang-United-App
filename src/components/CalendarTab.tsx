@@ -202,7 +202,6 @@ export function CalendarTab({ events }: CalendarTabProps) {
       <div className="section-heading">
         <div>
           <p className="eyebrow">SQUAD SCHEDULE</p>
-          <h2>Calendar</h2>
           <p className="muted">Stay ready. See what’s coming up for your squad.</p>
         </div>
         <div className="calendar-legend" aria-label="Event categories">

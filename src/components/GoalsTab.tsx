@@ -45,7 +45,7 @@ export function GoalsTab({ goals, canEdit, onAdd, onSaveReview, onDelete }: Goal
 
   return (
     <div className="tab-stack">
-      <div className="section-heading"><div><p className="eyebrow">YOUR DEVELOPMENT PLAN</p><h2>Individual goals</h2><p className="muted">Small steps, clear focus, real progress.</p></div><div className="goals-summary"><Target size={17} /><span><strong>{goals.length}</strong> active goals</span></div></div>
+      <div className="section-heading"><div><p className="eyebrow">YOUR DEVELOPMENT PLAN</p><p className="muted">Small steps, clear focus, real progress.</p></div><div className="goals-summary"><Target size={17} /><span><strong>{goals.length}</strong> active goals</span></div></div>
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="goal-grid">{goals.map((goal) => {
         const progress = goal.target_value === goal.start_value ? 100 : Math.max(0, Math.min(100, ((goal.current_value - goal.start_value) / (goal.target_value - goal.start_value)) * 100))
