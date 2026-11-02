@@ -1,6 +1,6 @@
 export type Role = 'admin' | 'official' | 'player'
 export type Squad = 'SPL1' | 'SPL2'
-export type EventType = 'match' | 'training' | 'meeting' | (string & {})
+export type EventType = 'match' | 'training' | 'gym' | 'meeting' | (string & {})
 export type GoalCategory = 'Communication' | 'Decision-making' | 'Execution' | 'Fitness'
 
 export interface Profile {

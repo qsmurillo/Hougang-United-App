@@ -92,7 +92,7 @@ create table if not exists public.calendar_events (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null references public.teams(id) on delete cascade,
   title text not null,
-  event_type text not null check (event_type in ('match', 'training', 'meeting')),
+  event_type text not null check (event_type in ('match', 'training', 'gym', 'meeting')),
   date date not null,
   time time not null,
   location text not null,

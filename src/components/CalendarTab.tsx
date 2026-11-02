@@ -1,20 +1,109 @@
 import { useMemo, useState } from 'react'
-import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek, subMonths } from 'date-fns'
-import { ChevronLeft, ChevronRight, MapPin, Clock3, CalendarDays } from 'lucide-react'
+import {
+  addMonths,
+  addWeeks,
+  addYears,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameDay,
+  isSameMonth,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+  subWeeks,
+  subYears,
+} from 'date-fns'
+import type { CSSProperties } from 'react'
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3, MapPin } from 'lucide-react'
 import type { CalendarEvent } from '../types'
 
-interface CalendarTabProps { events: CalendarEvent[] }
-const eventClass: Record<string, string> = { match: 'match-event', training: 'training-event', meeting: 'meeting-event' }
-const getEventClass = (eventType: unknown) => typeof eventType === 'string' ? eventClass[eventType.toLowerCase()] ?? '' : ''
+interface CalendarTabProps {
+  events: CalendarEvent[]
+}
+
+type EventCategory = 'match' | 'training' | 'gym' | 'meeting' | 'other'
+type CalendarView = 'year' | 'month' | 'week'
+
+const eventClasses: Record<EventCategory, string> = {
+  match: 'match-event',
+  training: 'training-event',
+  gym: 'gym-event',
+  meeting: 'meeting-event',
+  other: 'default-event',
+}
+
+const categoryLabels: Record<EventCategory, string> = {
+  match: 'Match',
+  training: 'Training',
+  gym: 'Gym',
+  meeting: 'Meeting',
+  other: 'Other',
+}
+
 const normalizeEventValue = (value: unknown) => String(value ?? '').trim().toLowerCase()
 const normalizeEventTime = (value: unknown) => normalizeEventValue(value).match(/^(\d{1,2}:\d{2})/)?.[1] ?? normalizeEventValue(value)
 const displayText = (value: unknown) => typeof value === 'string' || typeof value === 'number' ? String(value) : ''
 const formatEventTime = (value: unknown) => typeof value === 'string' ? value.slice(0, 5) : ''
 
+function getEventCategory(event: CalendarEvent): EventCategory {
+  const type = normalizeEventValue(event.event_type)
+  if (type === 'match' || type === 'training' || type === 'gym' || type === 'meeting') return type
+
+  const title = normalizeEventValue(event.title).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  if (title.includes('match') || title.includes('partido')) return 'match'
+  if (title.includes('training') || title.includes('entreno') || title.includes('entrenamiento')) return 'training'
+  if (title.includes('gym') || title.includes('gimnasio')) return 'gym'
+  if (title.includes('meeting') || title.includes('reunion')) return 'meeting'
+  return 'other'
+}
+
+function getEventClass(event: CalendarEvent) {
+  return eventClasses[getEventCategory(event)]
+}
+
+function getTimeInMinutes(value: unknown): number | null {
+  const match = normalizeEventTime(value).match(/^(\d{1,2}):(\d{2})$/)
+  if (!match) return null
+
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  return hours < 24 && minutes < 60 ? hours * 60 + minutes : null
+}
+
+function getEventCategories(events: CalendarEvent[]) {
+  return [...new Set(events.map(getEventCategory))]
+}
+
+interface PositionedEvent {
+  event: CalendarEvent
+  minute: number
+  lane: number
+}
+
+function positionDayEvents(events: CalendarEvent[]): Array<PositionedEvent & { laneCount: number }> {
+  const laneEnds: number[] = []
+  const positioned = events
+    .map((event) => ({ event, minute: getTimeInMinutes(event.time) }))
+    .filter((entry): entry is { event: CalendarEvent; minute: number } => entry.minute !== null)
+    .sort((a, b) => a.minute - b.minute)
+    .map(({ event, minute }) => {
+      let lane = laneEnds.findIndex((laneEnd) => laneEnd <= minute)
+      if (lane < 0) lane = laneEnds.length
+      laneEnds[lane] = minute + 60
+      return { event, minute, lane }
+    })
+
+  const laneCount = Math.max(1, laneEnds.length)
+  return positioned.map((entry) => ({ ...entry, laneCount }))
+}
+
 export function CalendarTab({ events }: CalendarTabProps) {
   const [month, setMonth] = useState(new Date())
   const [selected, setSelected] = useState(new Date())
-  const [view, setView] = useState<'month' | 'week' | 'year'>('month')
+  const [view, setView] = useState<CalendarView>('month')
+
   const uniqueEvents = useMemo(() => {
     const deduplicated = new Map<string, CalendarEvent>()
     events.forEach((event) => {
@@ -31,26 +120,254 @@ export function CalendarTab({ events }: CalendarTabProps) {
     })
     return [...deduplicated.values()]
   }, [events])
-  const days = useMemo(() => {
-    if (view === 'week') return eachDayOfInterval({ start: startOfWeek(selected, { weekStartsOn: 1 }), end: endOfWeek(selected, { weekStartsOn: 1 }) })
-    if (view === 'year') return Array.from({ length: 12 }, (_, index) => new Date(month.getFullYear(), index, 1))
-    return eachDayOfInterval({ start: startOfWeek(startOfMonth(month), { weekStartsOn: 1 }), end: endOfWeek(endOfMonth(month), { weekStartsOn: 1 }) })
-  }, [month, selected, view])
-  const dayEvents = uniqueEvents.filter((event) => isSameDay(new Date(`${event.date}T00:00:00`), selected)).sort((a, b) => normalizeEventValue(a.time).localeCompare(normalizeEventValue(b.time)))
-  const getEvents = (date: Date) => uniqueEvents.filter((event) => isSameDay(new Date(`${event.date}T00:00:00`), date))
-  const heading = view === 'year' ? String(month.getFullYear()) : format(view === 'week' ? selected : month, 'MMMM yyyy')
+
+  const eventsByDate = useMemo(() => {
+    const grouped = new Map<string, CalendarEvent[]>()
+    uniqueEvents.forEach((event) => {
+      const dateEvents = grouped.get(event.date) ?? []
+      dateEvents.push(event)
+      grouped.set(event.date, dateEvents)
+    })
+    grouped.forEach((dateEvents) => dateEvents.sort((a, b) => normalizeEventValue(a.time).localeCompare(normalizeEventValue(b.time))))
+    return grouped
+  }, [uniqueEvents])
+
+  const getEvents = (date: Date) => eventsByDate.get(format(date, 'yyyy-MM-dd')) ?? []
+  const dayEvents = getEvents(selected)
+  const weekDays = eachDayOfInterval({
+    start: startOfWeek(selected, { weekStartsOn: 1 }),
+    end: endOfWeek(selected, { weekStartsOn: 1 }),
+  })
+  const yearMonths = Array.from({ length: 12 }, (_, index) => new Date(month.getFullYear(), index, 1))
+  const monthDays = eachDayOfInterval({
+    start: startOfWeek(startOfMonth(month), { weekStartsOn: 1 }),
+    end: endOfWeek(endOfMonth(month), { weekStartsOn: 1 }),
+  })
+
+  const timedWeekEvents = weekDays.flatMap((date) => getEvents(date)
+    .map((event) => getTimeInMinutes(event.time))
+    .filter((minute): minute is number => minute !== null))
+  const firstWeekHour = Math.min(6, Math.floor(Math.min(...timedWeekEvents, 360) / 60))
+  const lastWeekHour = Math.max(22, Math.ceil((Math.max(...timedWeekEvents, 1320) + 90) / 60))
+  const hourCount = lastWeekHour - firstWeekHour
+  const hourHeight = 56
+
+  const heading = view === 'year'
+    ? String(month.getFullYear())
+    : format(view === 'week' ? selected : month, 'MMMM yyyy')
+
+  function navigatePeriod(direction: -1 | 1) {
+    if (view === 'year') {
+      const next = direction < 0 ? subYears(month, 1) : addYears(month, 1)
+      setMonth(next)
+      setSelected(new Date(next.getFullYear(), selected.getMonth(), 1))
+      return
+    }
+
+    if (view === 'week') {
+      const next = direction < 0 ? subWeeks(selected, 1) : addWeeks(selected, 1)
+      setSelected(next)
+      setMonth(startOfMonth(next))
+      return
+    }
+
+    const next = direction < 0 ? subMonths(month, 1) : addMonths(month, 1)
+    setMonth(next)
+    setSelected(new Date(next.getFullYear(), next.getMonth(), 1))
+  }
+
+  function selectYearMonth(date: Date) {
+    setMonth(date)
+    setSelected(date)
+    setView('month')
+  }
 
   return (
     <div className="tab-stack">
-      <div className="section-heading"><div><p className="eyebrow">SQUAD SCHEDULE</p><h2>Calendar</h2><p className="muted">Stay ready. See what’s coming up for your squad.</p></div><div className="calendar-legend"><span><i className="legend-square match-dot" /> Matches</span><span><i className="legend-square training-dot" /> Training</span><span><i className="legend-square meeting-dot" /> Meetings</span></div></div>
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">SQUAD SCHEDULE</p>
+          <h2>Calendar</h2>
+          <p className="muted">Stay ready. See what’s coming up for your squad.</p>
+        </div>
+        <div className="calendar-legend" aria-label="Event categories">
+          {(['match', 'training', 'gym', 'meeting', 'other'] as const).map((category) => (
+            <span key={category}><i className={`legend-square ${eventClasses[category]}`} />{categoryLabels[category]}</span>
+          ))}
+        </div>
+      </div>
+
       <div className="calendar-layout">
         <section className="surface calendar-card">
-          <div className="calendar-toolbar"><div className="calendar-month"><h3>{heading}</h3><button className="icon-button" aria-label="Previous period" onClick={() => setMonth(subMonths(month, 1))}><ChevronLeft size={18} /></button><button className="icon-button" aria-label="Next period" onClick={() => setMonth(addMonths(month, 1))}><ChevronRight size={18} /></button></div><div className="segmented-control">{(['month', 'week', 'year'] as const).map((type) => <button key={type} onClick={() => setView(type)} className={view === type ? 'selected' : ''}>{type[0].toUpperCase() + type.slice(1)}</button>)}</div></div>
-          {view === 'year' ? <div className="year-grid">{days.map((date) => <button className={isSameMonth(date, month) ? 'year-month current' : 'year-month'} key={date.toISOString()} onClick={() => { setMonth(date); setView('month') }}><strong>{format(date, 'MMM')}</strong><span>{uniqueEvents.filter((event) => new Date(`${event.date}T00:00:00`).getMonth() === date.getMonth()).length} events</span></button>)}</div> :
-          <div className="month-grid"><div className="weekday-row">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-days">{days.map((date) => <button key={date.toISOString()} className={`calendar-day ${!isSameMonth(date, month) && view === 'month' ? 'outside' : ''} ${isSameDay(date, selected) ? 'selected' : ''}`} onClick={() => setSelected(date)}><span className="calendar-date">{format(date, 'd')}</span><span className="day-event-dots">{getEvents(date).slice(0, 3).map((event) => <i className={getEventClass(event.event_type)} key={event.id} />)}</span>{getEvents(date).slice(0, 2).map((event) => <span className={`day-event ${getEventClass(event.event_type)}`} key={event.id}>{event.title}</span>)}</button>)}</div></div>}
-          <button className="today-button" onClick={() => { setMonth(new Date()); setSelected(new Date()) }}><CalendarDays size={15} /> Jump to today</button>
+          <div className="calendar-toolbar">
+            <div className="calendar-month">
+              <h3>{heading}</h3>
+              <button className="icon-button" aria-label="Previous period" onClick={() => navigatePeriod(-1)}><ChevronLeft size={18} /></button>
+              <button className="icon-button" aria-label="Next period" onClick={() => navigatePeriod(1)}><ChevronRight size={18} /></button>
+            </div>
+            <div className="segmented-control" aria-label="Calendar view">
+              {(['year', 'month', 'week'] as const).map((type) => (
+                <button key={type} onClick={() => setView(type)} className={view === type ? 'selected' : ''} aria-pressed={view === type}>
+                  {type[0].toUpperCase() + type.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {view === 'year' ? (
+            <div className="year-grid">
+              {yearMonths.map((date) => {
+                const monthStart = startOfMonth(date)
+                const monthEnd = endOfMonth(date)
+                const dates = eachDayOfInterval({ start: monthStart, end: monthEnd })
+                const offset = (monthStart.getDay() + 6) % 7
+                const monthEventCount = uniqueEvents.filter((event) => event.date.startsWith(format(date, 'yyyy-MM'))).length
+
+                return (
+                  <button
+                    className={isSameMonth(date, month) ? 'year-month current' : 'year-month'}
+                    key={date.toISOString()}
+                    onClick={() => selectYearMonth(date)}
+                    aria-label={`${format(date, 'MMMM yyyy')}, ${monthEventCount} events. Select to open month view.`}
+                  >
+                    <span className="year-month-heading">
+                      <strong>{format(date, 'MMM')}</strong>
+                      <span>{monthEventCount} events</span>
+                    </span>
+                    <span className="year-month-days" aria-hidden="true">
+                      {Array.from({ length: offset }, (_, index) => <i className="year-day-empty" key={`empty-${index}`} />)}
+                      {dates.map((day) => {
+                        const categories = getEventCategories(getEvents(day))
+                        return (
+                          <span className="year-day" key={day.toISOString()}>
+                            {format(day, 'd')}
+                            {categories.length > 0 && (
+                              <span className="year-day-dots">
+                                {categories.map((category) => <i className={eventClasses[category]} key={category} />)}
+                              </span>
+                            )}
+                          </span>
+                        )
+                      })}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          ) : view === 'week' ? (
+            <div className="week-scroll">
+              <div className="week-timeline">
+                <div className="week-header">
+                  <div className="week-time-gutter" />
+                  {weekDays.map((date) => (
+                    <button
+                      className={`week-day-heading ${isSameDay(date, selected) ? 'selected' : ''}`}
+                      key={date.toISOString()}
+                      onClick={() => setSelected(date)}
+                    >
+                      <span>{format(date, 'EEE')}</span>
+                      <strong>{format(date, 'd')}</strong>
+                    </button>
+                  ))}
+                </div>
+                <div className="week-body">
+                  <div className="week-time-axis" style={{ height: hourCount * hourHeight }}>
+                    {Array.from({ length: hourCount }, (_, index) => (
+                      <span style={{ top: index * hourHeight }} key={index}>{format(new Date(2000, 0, 1, firstWeekHour + index), 'HH:mm')}</span>
+                    ))}
+                  </div>
+                  <div className="week-columns">
+                    {weekDays.map((date) => (
+                      <div className="week-day-column" key={date.toISOString()} style={{ height: hourCount * hourHeight }}>
+                        {positionDayEvents(getEvents(date)).map(({ event, minute, lane, laneCount }) => {
+                          const top = (minute - firstWeekHour * 60) * hourHeight / 60
+                          const style: CSSProperties = {
+                            top,
+                            left: `calc(${lane * 100 / laneCount}% + 2px)`,
+                            width: `calc(${100 / laneCount}% - 4px)`,
+                          }
+                          return (
+                            <button
+                              className={`week-event ${getEventClass(event)}`}
+                              key={event.id}
+                              style={style}
+                              title={`${formatEventTime(event.time)} ${displayText(event.title)}`}
+                              aria-label={`${formatEventTime(event.time)} ${displayText(event.title)}, ${categoryLabels[getEventCategory(event)]}`}
+                              onClick={() => setSelected(date)}
+                            >
+                              <strong>{displayText(event.title)}</strong>
+                              <span>{formatEventTime(event.time)}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="month-grid">
+              <div className="weekday-row">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => <span key={day}>{day}</span>)}</div>
+              <div className="calendar-days">
+                {monthDays.map((date) => {
+                  const dateEvents = getEvents(date)
+                  const categories = getEventCategories(dateEvents)
+                  const categoryNames = categories.map((category) => categoryLabels[category]).join(', ')
+                  return (
+                    <button
+                      key={date.toISOString()}
+                      className={`calendar-day ${!isSameMonth(date, month) ? 'outside' : ''} ${isSameDay(date, selected) ? 'selected' : ''}`}
+                      onClick={() => setSelected(date)}
+                      aria-label={`${format(date, 'EEEE, MMMM d')}${dateEvents.length ? `, ${dateEvents.length} events: ${categoryNames}` : ', no events'}`}
+                    >
+                      <span className="calendar-date">{format(date, 'd')}</span>
+                      <span className="day-event-dots" aria-hidden="true">
+                        {categories.map((category) => <i className={eventClasses[category]} key={category} />)}
+                      </span>
+                      {dateEvents.slice(0, 2).map((event) => (
+                        <span className={`day-event ${getEventClass(event)}`} key={event.id}>{displayText(event.title)}</span>
+                      ))}
+                      {dateEvents.length > 2 && <span className="day-event-overflow">+{dateEvents.length - 2} more</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <button className="today-button" onClick={() => { setMonth(new Date()); setSelected(new Date()) }}>
+            <CalendarDays size={15} /> Jump to today
+          </button>
         </section>
-        <aside className="surface day-detail"><div className="detail-date"><div><p className="eyebrow">SELECTED DAY</p><h3>{format(selected, 'EEEE')}</h3><strong>{format(selected, 'd MMMM yyyy')}</strong></div><span className="detail-day">{format(selected, 'dd')}</span></div><div className="detail-event-list">{dayEvents.length ? dayEvents.map((event) => <article className={`detail-event ${getEventClass(event.event_type)}`} key={event.id}><div className="event-time"><Clock3 size={14} />{formatEventTime(event.time)}</div><h4>{displayText(event.title)}</h4><p><MapPin size={14} />{displayText(event.location)}</p>{displayText(event.opponent) && <div className="opponent">vs. {displayText(event.opponent)}</div>}{displayText(event.details) && <p className="event-details">{displayText(event.details)}</p>}</article>) : <div className="empty-day"><span>◷</span><strong>A clear day</strong><p>There are no events scheduled.</p></div>}</div></aside>
+
+        <aside className="surface day-detail">
+          <div className="detail-date">
+            <div>
+              <p className="eyebrow">SELECTED DAY</p>
+              <h3>{format(selected, 'EEEE')}</h3>
+              <strong>{format(selected, 'd MMMM yyyy')}</strong>
+            </div>
+            <span className="detail-day">{format(selected, 'dd')}</span>
+          </div>
+          <div className="detail-event-list">
+            {dayEvents.length ? dayEvents.map((event) => (
+              <article className={`detail-event ${getEventClass(event)}`} key={event.id}>
+                <div className="event-time"><Clock3 size={14} />{formatEventTime(event.time)}</div>
+                <h4>{displayText(event.title)}</h4>
+                <p><MapPin size={14} />{displayText(event.location)}</p>
+                {displayText(event.opponent) && <div className="opponent">vs. {displayText(event.opponent)}</div>}
+                {displayText(event.details) && <p className="event-details">{displayText(event.details)}</p>}
+              </article>
+            )) : (
+              <div className="empty-day">
+                <span>◷</span>
+                <strong>A clear day</strong>
+                <p>There are no events scheduled.</p>
+              </div>
+            )}
+          </div>
+        </aside>
       </div>
     </div>
   )

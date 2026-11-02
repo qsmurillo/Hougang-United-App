@@ -98,3 +98,51 @@
 .gps-chart-legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .gps-chart-legend i{width:8px;height:8px;border-radius:50%}
 @media(max-width:680px){.gps-detail-panel dl{grid-template-columns:repeat(2,minmax(0,1fr))}.gps-chart-legend{justify-content:flex-start}}
+
+.match-event{--event-color:#c2410c;--event-tint:#fff7ed;--event-text:#7c2d12}
+.training-event{--event-color:#1d4ed8;--event-tint:#eff6ff;--event-text:#1e3a8a}
+.gym-event{--event-color:#7e22ce;--event-tint:#faf5ff;--event-text:#581c87}
+.meeting-event{--event-color:#15803d;--event-tint:#f0fdf4;--event-text:#14532d}
+.default-event{--event-color:#475569;--event-tint:#f1f5f9;--event-text:#334155}
+.legend-square{background:var(--event-color,#475569)}
+.calendar-legend{flex-wrap:wrap}
+.day-event-dots{flex-wrap:wrap}
+.day-event-dots i{flex:0 0 6px;background:var(--event-color,#475569)}
+.day-event{max-width:100%;border:1px solid var(--event-color);border-left-width:3px;background:var(--event-tint);color:var(--event-text);font-weight:600}
+.day-event-overflow{display:block;margin-top:3px;color:#526174;font-size:7px;font-weight:700}
+.detail-event{border-color:var(--event-color);background:var(--event-tint);color:var(--event-text)}
+.detail-event.match-event,.detail-event.training-event,.detail-event.gym-event,.detail-event.meeting-event,.detail-event.default-event{border-color:var(--event-color);background:var(--event-tint)}
+.detail-event h4{color:var(--event-text)}
+.detail-event .opponent{color:var(--event-text)}
+.year-grid{grid-template-columns:repeat(4,minmax(0,1fr));min-height:0}
+.year-month{min-width:0;justify-content:flex-start;gap:8px;padding:9px}
+.year-month.current{border-color:var(--event-color,#c2410c);background:#fffaf5}
+.year-month-heading{display:flex;width:100%;align-items:center;justify-content:space-between}
+.year-month-heading>span{font-size:8px;color:#64748b}
+.year-month-days{display:grid;width:100%;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;text-align:center}
+.year-day-empty,.year-day{min-width:0;height:20px}
+.year-day{position:relative;display:grid;place-items:center;color:#475569;font-size:8px}
+.year-day-dots{position:absolute;bottom:1px;left:50%;display:flex;gap:1px;transform:translateX(-50%)}
+.year-day-dots i{width:3px;height:3px;border-radius:50%;background:var(--event-color,#475569)}
+.week-scroll{overflow-x:auto}
+.week-timeline{min-width:680px}
+.week-header{display:grid;grid-template-columns:46px repeat(7,minmax(0,1fr));border-bottom:1px solid #e9edf3}
+.week-time-gutter{border-right:1px solid #edf0f4}
+.week-day-heading{height:42px;border:0;border-right:1px solid #edf0f4;background:#fff;color:#64748b;display:flex;align-items:center;justify-content:center;gap:5px;font-size:9px}
+.week-day-heading:last-child{border-right:0}
+.week-day-heading strong{color:#334155;font-size:10px}
+.week-day-heading.selected{background:#eff6ff;color:#1d4ed8}
+.week-day-heading.selected strong{color:#1e3a8a}
+.week-body{display:grid;grid-template-columns:46px minmax(0,1fr)}
+.week-time-axis{position:relative;border-right:1px solid #edf0f4}
+.week-time-axis span{position:absolute;right:5px;transform:translateY(-50%);color:#64748b;font-size:8px}
+.week-columns{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.week-day-column{position:relative;min-width:0;border-right:1px solid #edf0f4;background:repeating-linear-gradient(to bottom,#fff 0,#fff 55px,#e9edf3 55px,#e9edf3 56px)}
+.week-day-column:last-child{border-right:0}
+.week-event{position:absolute;z-index:1;min-width:0;min-height:42px;padding:4px 5px;border:1px solid var(--event-color);border-left-width:3px;border-radius:4px;background:var(--event-tint);color:var(--event-text);text-align:left;overflow:hidden}
+.week-event strong,.week-event span{display:block;overflow:hidden;text-overflow:ellipsis}
+.week-event strong{font-size:8px;line-height:1.2}
+.week-event span{margin-top:3px;font-size:7px}
+@media(max-width:900px){.year-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:680px){.calendar-legend{justify-content:flex-start;gap:7px}.year-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.year-month{padding:7px}.week-timeline{min-width:650px}}
+@media(max-width:390px){.year-month-days{gap:0}.year-day-empty,.year-day{height:18px}}
