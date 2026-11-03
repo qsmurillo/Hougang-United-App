@@ -80,9 +80,9 @@ export const mockEvents: CalendarEvent[] = [
 ]
 
 export const mockGoals: IndividualGoal[] = mockProfiles.filter((_, index) => [0, 1, 23, 24].includes(index)).flatMap((profile) => [
-  { id: `${profile.id}-goal-1`, player_id: profile.id, title: 'Scan before receiving', description: 'Check both shoulders before the first touch.', category: 'Decision-making', start_value: 2, current_value: 3, target_value: 4 },
-  { id: `${profile.id}-goal-2`, player_id: profile.id, title: 'Communicate early', description: 'Give clear information in defensive transitions.', category: 'Communication', start_value: 2, current_value: 3, target_value: 4 },
-  { id: `${profile.id}-goal-3`, player_id: profile.id, title: 'Repeated sprint capacity', description: 'Improve repeated high-intensity effort.', category: 'Fitness', start_value: 1, current_value: 2, target_value: 4 },
+  { id: `${profile.id}-goal-1`, player_id: profile.id, title: 'Scan before receiving', description: 'Check both shoulders before the first touch.', category: 'Decision-making', start_value: 2, current_value: 3, target_value: 4, video_url: null },
+  { id: `${profile.id}-goal-2`, player_id: profile.id, title: 'Communicate early', description: 'Give clear information in defensive transitions.', category: 'Communication', start_value: 2, current_value: 3, target_value: 4, video_url: null },
+  { id: `${profile.id}-goal-3`, player_id: profile.id, title: 'Repeated sprint capacity', description: 'Improve repeated high-intensity effort.', category: 'Fitness', start_value: 1, current_value: 2, target_value: 4, video_url: null },
 ])
 
 export function teamIdForSquad(squad: Squad): string {

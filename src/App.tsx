@@ -345,6 +345,16 @@ function App() {
     notify('success', 'Goal review saved.')
   }
 
+  async function updateGoalVideo(goalId: string, videoUrl: string | null) {
+    if (demo) setGoals((previous) => previous.map((goal) => goal.id === goalId ? { ...goal, video_url: videoUrl } : goal))
+    else if (supabase) {
+      const { error } = await supabase.from('individual_goals').update({ video_url: videoUrl }).eq('id', goalId)
+      if (error) { notify('error', `Goal video could not be updated: ${error.message}`); throw error }
+      setGoals((previous) => previous.map((goal) => goal.id === goalId ? { ...goal, video_url: videoUrl } : goal))
+    }
+    notify('success', videoUrl ? 'Goal video link saved.' : 'Goal video link removed.')
+  }
+
   async function deleteGoal(goalId: string) {
     if (!window.confirm('Delete this development goal and its reviews?')) return
     if (demo) setGoals((previous) => previous.filter((goal) => goal.id !== goalId))
@@ -406,7 +416,7 @@ function App() {
               {tab === 'checkin' && <CheckinTab key={selectedPlayer?.id} existing={selectedCheckin} history={checkins.filter((checkin) => checkin.player_id === selectedPlayer?.id)} onSubmit={submitCheckin} canEdit={role === 'player' || role === 'admin'} />}
               {tab === 'activity' && <><ActivityTab stat={selectedStat} metrics={metrics} checkins={checkins} selectedPlayer={selectedPlayer} />{isStaff && <section className="staff-gps-section"><GpsTab metrics={squadMetrics} profiles={squadProfiles} events={events} selectedPlayer={selectedPlayer} canCompare /></section>}</>}
               {tab === 'calendar' && <CalendarTab events={events} />}
-              {tab === 'goals' && <GoalsTab key={selectedPlayer?.id} goals={playerGoals} canEdit={role === 'player' || role === 'admin'} onAdd={addGoal} onSaveReview={saveReview} onDelete={deleteGoal} />}
+              {tab === 'goals' && <GoalsTab key={selectedPlayer?.id} goals={playerGoals} canEdit={role === 'player' || role === 'admin'} onAdd={addGoal} onSaveReview={saveReview} onUpdateVideo={updateGoalVideo} onDelete={deleteGoal} />}
             </div></Suspense>
             <footer className="main-footer"><span>HOUGANG UNITED <b>·</b> PERFORMANCE HUB</span><span>PLAYER DEVELOPMENT, TOGETHER <span className="footer-star">✳</span></span></footer>
           </div>

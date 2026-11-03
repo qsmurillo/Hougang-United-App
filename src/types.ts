@@ -106,5 +106,6 @@ export interface IndividualGoal {
   start_value: number
   current_value: number
   target_value: number
+  video_url: string | null
   goal_reviews?: GoalReview[]
 }
